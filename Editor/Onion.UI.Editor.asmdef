@@ -1,8 +1,12 @@
 {
-    "name": "Onion.Template.Runtime",
+    "name": "Onion.UI.Editor",
     "rootNamespace": "Onion",
-    "references": [],
-    "includePlatforms": [],
+    "references": [
+        "Onion.UI.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

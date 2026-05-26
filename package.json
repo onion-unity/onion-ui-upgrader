@@ -1,7 +1,7 @@
 {
-  "name": "com.onion.template",
+  "name": "com.onion.uitools",
   "version": "1.0.0",
-  "displayName": "Onion Template Package",
+  "displayName": "Onion UI Tools",
   "description": "",
   "unity": "6000.0",
   "author": {
