@@ -1,7 +1,7 @@
 {
-  "name": "com.onion.uitools",
+  "name": "com.onion.uiupgrader",
   "version": "1.0.0",
-  "displayName": "Onion UI Tools",
+  "displayName": "Onion UI Upgrader",
   "description": "",
   "unity": "6000.0",
   "author": {
@@ -9,7 +9,7 @@
   },
   "hideInEditor": false,
   "repository": {
-    "url": "",
+    "url": "https://github.com/onion-unity/onion-ui-upgrader.git",
     "type": "git"
   }
 }
