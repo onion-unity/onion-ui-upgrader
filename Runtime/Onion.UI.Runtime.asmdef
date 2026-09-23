@@ -1,7 +1,9 @@
 {
     "name": "Onion.UI.Runtime",
     "rootNamespace": "Onion",
-    "references": [],
+    "references": [
+        "UnityEngine.UI"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
