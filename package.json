@@ -2,10 +2,20 @@
   "name": "com.onion.uiupgrader",
   "version": "1.0.0",
   "displayName": "Onion UI Upgrader",
-  "description": "",
+  "description": "Upgrades uGUI Selectable navigation without subclassing Selectable: configurable neighbor selection for keyboard and gamepad, tuned by Navigation Profiles.",
+  "keywords": [
+    "ui",
+    "ugui",
+    "navigation",
+    "selectable",
+    "gamepad"
+  ],
   "unity": "6000.0",
   "author": {
     "name": "Seungbin"
+  },
+  "dependencies": {
+    "com.unity.ugui": "2.0.0"
   },
   "hideInEditor": false,
   "repository": {
