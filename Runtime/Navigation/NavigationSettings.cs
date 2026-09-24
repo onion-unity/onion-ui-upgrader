@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Onion.UI.Navigation {
     /// <summary>
@@ -7,9 +8,13 @@ namespace Onion.UI.Navigation {
     /// </summary>
     [Serializable]
     internal sealed class NavigationSettings : UpgradeSettings {
+        /// <summary>
+        /// The project-wide navigation profile.
+        /// </summary>
         [Tooltip("Profile used to upgrade Selectable navigation.")]
         [SerializeField]
-        internal NavigationProfile defaultProfile;
+        [FormerlySerializedAs("defaultProfile")]
+        internal NavigationProfile projectWideProfile;
 
         /// <summary>
         /// The default profile, or null when the upgrade is off, no profile is assigned,
@@ -22,7 +27,7 @@ namespace Onion.UI.Navigation {
                     return null;
                 }
 
-                return settings.navigation.defaultProfile;
+                return settings.navigation.projectWideProfile;
             }
         }
     }

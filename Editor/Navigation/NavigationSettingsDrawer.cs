@@ -7,19 +7,20 @@ namespace Onion.UI.Editor {
     /// The navigation section of the UIUpgraderSettings inspector.
     /// </summary>
     internal static class NavigationSettingsDrawer {
-        private const float NewButtonWidth = 50f;
+        private const float NewButtonWidth = 22f;
 
         internal static void Draw(SerializedProperty navigation) {
             var enabled = navigation.FindPropertyRelative(nameof(NavigationSettings.enabled));
-            var profile = navigation.FindPropertyRelative(nameof(NavigationSettings.defaultProfile));
+            var profile = navigation.FindPropertyRelative(nameof(NavigationSettings.projectWideProfile));
 
             if (enabled.boolValue && profile.objectReferenceValue == null) {
-                EditorGUILayout.HelpBox("No profile is assigned, so Unity's default navigation is still used.\nAssign a profile or click New.", MessageType.Warning);
+                EditorGUILayout.HelpBox("No profile is assigned, so Unity's default navigation is still used.\nAssign a profile or click + to create one.", MessageType.Warning);
             }
 
             using (new EditorGUILayout.HorizontalScope()) {
                 EditorGUILayout.PropertyField(profile);
-                if (GUILayout.Button("New", GUILayout.Width(NewButtonWidth))) {
+                var newContent = EditorGUIUtility.TrIconContent("Toolbar Plus", "Create a new Navigation Profile");
+                if (GUILayout.Button(newContent, EditorStyles.miniButton, GUILayout.Width(NewButtonWidth))) {
                     CreateProfile(profile);
                 }
             }

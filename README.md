@@ -29,7 +29,7 @@ Nothing to add to your scenes. The upgrade is **off** by default, so installing 
 
 1. Open **Project Settings > Onion > UI Upgrader**.
 2. Check the box in the **Navigation** header.
-3. Assign a Navigation Profile, or click **New** next to the profile field to create one.
+3. Assign a Navigation Profile, or click **+** next to the profile field to create one.
 
 On first load, the package creates `Assets/Settings/Onion_UIUpgraderSettings`, the project-wide settings for the whole package.
 

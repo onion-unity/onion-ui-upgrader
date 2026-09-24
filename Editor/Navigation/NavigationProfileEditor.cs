@@ -60,6 +60,16 @@ namespace Onion.UI.Editor {
         }
 
         public override void OnInspectorGUI() {
+            var settings = UIUpgraderSettings.instance;
+            
+            if (settings != null && settings.navigation.projectWideProfile == target) {
+                EditorGUILayout.Space();
+                EditorGUILayout.HelpBox(settings.navigation.enabled
+                    ? "This is the project-wide navigation profile."
+                    : "This is the project-wide navigation profile, but the navigation upgrade is off.", MessageType.Info);
+                EditorGUILayout.Space();
+            }
+
             serializedObject.Update();
             EditorGUI.BeginChangeCheck();
             DrawPropertiesExcluding(serializedObject, "m_Script");
