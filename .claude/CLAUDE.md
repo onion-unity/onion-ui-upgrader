@@ -35,6 +35,18 @@ The goal is to upgrade UGUI `Selectable` navigation without subclassing `Selecta
 - This design intentionally differs from onion-scene-management's settings in these ways: the main asset is looked up by config key instead of scanning Preloaded Assets, `hideFlags` are not changed on the asset, and nothing is created in batch mode.
 - The namespace `Onion.UI.Navigation` shadows the type `UnityEngine.UI.Navigation`, so files in it use the alias `UINavigation`.
 
+## Deferred optimizations
+
+Not done yet, by the user's choice. `NavigationUpgrader` recomputes all four neighbors every `LateUpdate` while something is selected. That costs about 4n `GetLocalRect` calls per frame for n Selectables, each with 1 `GetWorldCorners` and 4 `InverseTransformPoint` native calls.
+- Compute each candidate's local rect once per frame and share it across the four directions, instead of recomputing it inside every `FindNeighbor` call. This cuts the rect work to 1/4.
+- Transform corners with `origin.transform.worldToLocalMatrix` fetched once and `MultiplyPoint3x4`, instead of calling `InverseTransformPoint` per corner. This leaves about one native call (`GetWorldCorners`) per candidate.
+
+## Known limitations
+
+Also not addressed yet.
+- One-frame lag: Unity's `Selectable.OnMove` searches at the moment of input, inside `EventSystem.Update`. The upgrader's result comes from the previous frame's `LateUpdate`. If a candidate becomes non-interactable in this frame's `Update` before input is processed, it can still be navigated to. `Selectable.Navigate` only checks `IsActive()`, not interactability. Candidate fix: move the work to an `Update` with a very low `[DefaultExecutionOrder]` so it runs before `EventSystem.Update`.
+- Changing the selected Selectable's own `navigation` from a script while it is selected is lost. The upgrader overwrites it every frame from `_originalNavigation` and restores that old value on release.
+
 ## Assemblies and namespaces
 
 - `Runtime/Onion.UI.Runtime.asmdef` and `Editor/Onion.UI.Editor.asmdef` (Editor-only, references Runtime). Both set `rootNamespace` to `Onion`, but code uses per-folder sub-namespaces, e.g. `Onion.UI.Navigation` for `Runtime/Navigation/`.
