@@ -1,19 +1,34 @@
 using System.Collections.Generic;
-using Onion.UI.Navigation;
 using UnityEditor;
+using UnityEditor.Callbacks;
 using UnityEngine;
 
 namespace Onion.UI.Editor {
     /// <summary>
     /// Project Settings > Onion > UI Upgrader. Shows the same inspector as the settings asset,
-    /// so the on/off guidance is found without knowing where the asset lives.
+    /// so every upgrade can be switched without knowing where the asset lives.
     /// </summary>
-    internal static class NavigationProjectSettings {
+    internal static class UIUpgraderProjectSettings {
         private const string Path = "Project/Onion/UI Upgrader";
+
+        internal static void Open() {
+            SettingsService.OpenProjectSettings(Path);
+        }
+
+        // Double-clicking the settings asset opens this page instead of just selecting it.
+        [OnOpenAsset]
+        private static bool OnOpenAsset(int instanceID, int line) {
+            if (EditorUtility.InstanceIDToObject(instanceID) is not UIUpgraderSettings) {
+                return false;
+            }
+
+            Open();
+            return true;
+        }
 
         [SettingsProvider]
         private static SettingsProvider CreateProvider() {
-            NavigationSettings settings = null;
+            UIUpgraderSettings settings = null;
             UnityEditor.Editor editor = null;
             var padding = new GUIStyle { margin = new RectOffset(10, 10, 10, 10) };
 
@@ -22,12 +37,12 @@ namespace Onion.UI.Editor {
                 keywords = new HashSet<string> { "Navigation", "Selectable", "Profile", "Upgrade" },
                 guiHandler = _ => {
                     if (settings == null) {
-                        settings = NavigationSettingsProvider.GetOrCreateSettings();
+                        settings = UIUpgraderSettingsProvider.GetOrCreateSettings();
                     }
 
-                    UnityEditor.Editor.CreateCachedEditor(settings, typeof(NavigationSettingsEditor), ref editor);
+                    UnityEditor.Editor.CreateCachedEditor(settings, typeof(UIUpgraderSettingsEditor), ref editor);
                     using (new EditorGUILayout.VerticalScope(padding)) {
-                        editor.OnInspectorGUI();
+                        ((UIUpgraderSettingsEditor)editor).DrawSettings();
                     }
                 },
             };

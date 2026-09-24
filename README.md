@@ -25,12 +25,13 @@ Requires Unity 6000.0 or later and uGUI (`com.unity.ugui`) 2.0.0.
 
 ### Setup
 
-Nothing to add to your scenes. On first load, the package creates two assets in `Assets/Settings/`:
+Nothing to add to your scenes. The upgrade is **off** by default, so installing the package changes nothing until you turn it on.
 
-- `Onion_NavigationSettings`: project-wide settings
-- `Onion_DefaultNavigationProfile`: the profile that is used
+1. Open **Project Settings > Onion > UI Upgrader**.
+2. Check the box in the **Navigation** header.
+3. Assign a Navigation Profile, or click **New** next to the profile field to create one.
 
-Open **Project Settings > Onion > UI Upgrader** to see and change them.
+On first load, the package creates `Assets/Settings/Onion_UIUpgraderSettings`, the project-wide settings for the whole package.
 
 ## How it works
 
@@ -64,4 +65,4 @@ Create additional profiles from **Assets > Create > Onion > UI > Navigation Prof
 
 ## Turning it off
 
-Clear the profile field in **Project Settings > Onion > UI Upgrader**. With no profile assigned, every Selectable uses Unity's default navigation.
+Uncheck the box in the **Navigation** header in **Project Settings > Onion > UI Upgrader**. Every Selectable then uses Unity's default navigation. The assigned profile is kept, so upgrading again restores the same behavior.

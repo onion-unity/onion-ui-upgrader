@@ -24,7 +24,7 @@ namespace Onion.UI.Navigation {
         }
 
         private void LateUpdate() {
-            // No profile assigned means the upgrade is off: leave every Selectable to Unity.
+            // Upgrade turned off (or no profile): leave every Selectable to Unity.
             var profile = NavigationSettings.profile;
             if (profile == null) {
                 Release();
@@ -63,7 +63,7 @@ namespace Onion.UI.Navigation {
 
         /// <summary>
         /// The navigation the upgrader would apply to this Selectable, or false when it isn't upgraded
-        /// (no profile assigned, Explicit/None mode, or not a RectTransform). Also used by the Scene view visualizer.
+        /// (upgrade off, Explicit/None mode, or not a RectTransform). Also used by the Scene view visualizer.
         /// </summary>
         internal static bool TryResolve(Selectable selectable, out UINavigation navigation) {
             navigation = selectable.navigation;
