@@ -11,7 +11,7 @@ namespace Onion.UI.Navigation {
 
         [Tooltip("How far a candidate may deviate from the move direction, in degrees.\n0 = same row/column only, 90 = anything ahead (same as Unity).")]
         [Range(0f, 90f)]
-        public float directionTolerance = 60f;
+        public float directionTolerance = 90f;
 
         [Tooltip("0 = pick the nearest candidate, 0.25 = same as Unity, 1 = strongly prefer the one in the same row/column.")]
         [Range(0f, 1f)]
