@@ -86,12 +86,14 @@ namespace Onion.UI.Editor {
             }
 
             var selected = Selection.transforms;
+            // While a profile is being edited, nothing in the scene is selected, so show every arrow at full strength.
+            bool editingProfile = Selection.activeObject is NavigationProfile;
             foreach (var selectable in Selectable.allSelectablesArray) {
                 if (!StageUtility.IsGameObjectRenderedByCamera(selectable.gameObject, Camera.current)) {
                     continue;
                 }
 
-                Draw(selectable, Array.IndexOf(selected, selectable.transform) >= 0);
+                Draw(selectable, editingProfile || Array.IndexOf(selected, selectable.transform) >= 0);
             }
         }
 
