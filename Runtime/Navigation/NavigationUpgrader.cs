@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -11,6 +12,7 @@ namespace Onion.UI.Navigation {
 
         private static readonly Vector3[] _corners = new Vector3[4];
         private static Selectable[] _candidates = new Selectable[64];
+        private static readonly List<NavigationGroup> _chain = new();
 
         private Selectable _target;
         private UINavigation _originalNavigation;
@@ -66,13 +68,25 @@ namespace Onion.UI.Navigation {
         /// (upgrade off, Explicit/None mode, or not a RectTransform). Also used by the Scene view visualizer.
         /// </summary>
         internal static bool TryResolve(Selectable selectable, out UINavigation navigation) {
+            return TryResolve(selectable, out navigation, null);
+        }
+
+        /// <param name="entered">
+        /// When not null (length 4: left, right, up, down), receives the outermost group each move
+        /// enters, or null when it doesn't enter one.
+        /// </param>
+        internal static bool TryResolve(Selectable selectable, out UINavigation navigation, NavigationGroup[] entered) {
+            if (entered != null) {
+                System.Array.Clear(entered, 0, entered.Length);
+            }
+
             navigation = selectable.navigation;
             var profile = NavigationSettings.profile;
             if (profile == null || !IsUpgradable(selectable)) {
                 return false;
             }
 
-            navigation = Resolve(selectable, navigation, profile);
+            navigation = Resolve(selectable, navigation, profile, entered);
             return true;
         }
 
@@ -85,7 +99,7 @@ namespace Onion.UI.Navigation {
             return isAutomatic && selectable.transform is RectTransform;
         }
 
-        private static UINavigation Resolve(Selectable origin, UINavigation original, NavigationProfile profile) {
+        private static UINavigation Resolve(Selectable origin, UINavigation original, NavigationProfile profile, NavigationGroup[] entered = null) {
             var mode = original.mode;
             // Unity only wraps around in Horizontal/Vertical mode.
             bool wrap = original.wrapAround && mode != UINavigation.Mode.Automatic;
@@ -100,13 +114,13 @@ namespace Onion.UI.Navigation {
             navigation.selectOnDown = null;
 
             if ((mode & UINavigation.Mode.Horizontal) != 0 && !ControlsValue(origin, mode, horizontal: true)) {
-                navigation.selectOnLeft = FindNeighbor(origin, from, Vector2.left, wrap, profile, count);
-                navigation.selectOnRight = FindNeighbor(origin, from, Vector2.right, wrap, profile, count);
+                navigation.selectOnLeft = FindNeighbor(origin, from, Vector2.left, wrap, profile, count, entered, 0);
+                navigation.selectOnRight = FindNeighbor(origin, from, Vector2.right, wrap, profile, count, entered, 1);
             }
 
             if ((mode & UINavigation.Mode.Vertical) != 0 && !ControlsValue(origin, mode, horizontal: false)) {
-                navigation.selectOnUp = FindNeighbor(origin, from, Vector2.up, wrap, profile, count);
-                navigation.selectOnDown = FindNeighbor(origin, from, Vector2.down, wrap, profile, count);
+                navigation.selectOnUp = FindNeighbor(origin, from, Vector2.up, wrap, profile, count, entered, 2);
+                navigation.selectOnDown = FindNeighbor(origin, from, Vector2.down, wrap, profile, count, entered, 3);
             }
 
             return navigation;
@@ -143,23 +157,30 @@ namespace Onion.UI.Navigation {
             return Selectable.AllSelectablesNoAlloc(_candidates);
         }
 
-        private static Selectable FindNeighbor(Selectable origin, Rect from, Vector2 direction, bool wrap, NavigationProfile profile, int count) {
+        private static Selectable FindNeighbor(Selectable origin, Rect from, Vector2 direction, bool wrap, NavigationProfile profile, int count, NavigationGroup[] entered, int slot) {
             var scope = NavigationGroup.ScopeOf(origin.transform);
             int index = Search(origin, scope, null, new NeighborSearch(from, direction, wrap, profile), count);
 
-            // Nothing inside a Pass Through group: continue in its parent scope, where the group itself
-            // is a candidate too and must be skipped.
+            // Nothing inside a Pass Through group: continue in its parent scope, without the group's own members.
             while (index < 0 && scope != null && scope.boundary == NavigationBoundary.PassThrough) {
                 var leaving = scope;
                 scope = leaving.parent;
                 index = Search(origin, scope, leaving, new NeighborSearch(from, direction, wrap, profile), count);
             }
 
-            return Pick(origin, from, direction, profile, index, count);
+            if (index < 0) {
+                return null;
+            }
+
+            var selectable = Enter(_candidates[index], scope, out var group);
+            if (entered != null) {
+                entered[slot] = group;
+            }
+
+            return selectable;
         }
 
-        // Considers the Selectables directly in the scope and its direct child groups, each group as one rect.
-        // Indices below count are Selectables, the rest are groups.
+        // Considers every Selectable under the scope, including those in its child groups.
         private static int Search(Selectable origin, NavigationGroup scope, NavigationGroup excluded, NeighborSearch search, int count) {
             for (int i = 0; i < count; i++) {
                 var candidate = _candidates[i];
@@ -167,49 +188,38 @@ namespace Onion.UI.Navigation {
                     continue;
                 }
 
-                if (NavigationGroup.ScopeOf(candidate.transform) != scope) {
+                var transform = candidate.transform;
+                if (scope != null && !transform.IsChildOf(scope.transform)) {
                     continue;
                 }
 
-                search.Consider(i, GetLocalRect(origin.transform, (RectTransform)candidate.transform));
-            }
-
-            var groups = NavigationGroup.activeGroups;
-            for (int i = 0; i < groups.Count; i++) {
-                var group = groups[i];
-                if (group == excluded || group.parent != scope) {
+                if (excluded != null && transform.IsChildOf(excluded.transform)) {
                     continue;
                 }
 
-                search.Consider(count + i, GetLocalRect(origin.transform, (RectTransform)group.transform));
+                search.Consider(i, GetLocalRect(origin.transform, (RectTransform)transform));
             }
 
             return search.result;
         }
 
-        private static Selectable Pick(Selectable origin, Rect from, Vector2 direction, NavigationProfile profile, int index, int count) {
-            if (index < 0) {
-                return null;
+        // When the picked Selectable is in a group below the scope, the move enters that group: the first usable
+        // default from the outermost group inward wins, otherwise the picked Selectable itself.
+        private static Selectable Enter(Selectable picked, NavigationGroup scope, out NavigationGroup entered) {
+            _chain.Clear();
+            for (var group = NavigationGroup.ScopeOf(picked.transform); group != scope; group = group.parent) {
+                _chain.Add(group);
             }
 
-            if (index < count) {
-                return _candidates[index];
+            entered = _chain.Count > 0 ? _chain[_chain.Count - 1] : null;
+            for (int i = _chain.Count - 1; i >= 0; i--) {
+                var selectable = _chain[i].defaultSelectable;
+                if (selectable != null && selectable.isActiveAndEnabled && IsCandidate(selectable)) {
+                    return selectable;
+                }
             }
 
-            return Enter(origin, from, direction, profile, NavigationGroup.activeGroups[index - count], count);
-        }
-
-        // The group's default if usable, otherwise its member closest in the move direction. Any angle is
-        // accepted there, since only the group itself had to be within the tolerance.
-        private static Selectable Enter(Selectable origin, Rect from, Vector2 direction, NavigationProfile profile, NavigationGroup group, int count) {
-            var selectable = group.defaultSelectable;
-            if (selectable != null && selectable.isActiveAndEnabled && IsCandidate(selectable)) {
-                return selectable;
-            }
-
-            var search = new NeighborSearch(from, direction, false, 90f, profile.alignmentPower);
-            int index = Search(origin, group, null, search, count);
-            return Pick(origin, from, direction, profile, index, count);
+            return picked;
         }
 
         private static bool IsCandidate(Selectable selectable) {

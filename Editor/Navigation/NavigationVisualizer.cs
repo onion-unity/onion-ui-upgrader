@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using Onion.UI.Navigation;
 using UnityEditor;
@@ -26,6 +27,17 @@ namespace Onion.UI.Editor {
         private const string UnityEnabledKey = "SelectableEditor.ShowNavigation";
         private static readonly FieldInfo UnityEnabledField = Type.GetType("UnityEditor.UI.SelectableEditor, UnityEditor.UI")
             ?.GetField("s_ShowNavigation", BindingFlags.NonPublic | BindingFlags.Static);
+
+        // Group boxes: margin and dash length are × the handle size, so they stay constant on screen.
+        private const float GroupThickness = 2f;
+        private const float GroupMargin = 0.1f;
+        private const float GroupDash = 0.06f;
+        private static readonly Color GroupColor = new Color(0.8f, 0.8f, 0.8f, 0.8f);
+
+        private static readonly NavigationGroup[] _entered = new NavigationGroup[4];
+        private static readonly Dictionary<NavigationGroup, Rect?> _boxes = new();
+        private static readonly Vector3[] _corners = new Vector3[4];
+        private static Selectable[] _selectables;
 
         private static bool _enabled;
 
@@ -93,12 +105,40 @@ namespace Onion.UI.Editor {
                 return;
             }
 
-            foreach (var selectable in Selectable.allSelectablesArray) {
+            _selectables = Selectable.allSelectablesArray;
+            _boxes.Clear();
+
+            foreach (var group in NavigationGroup.activeGroups) {
+                if (StageUtility.IsGameObjectRenderedByCamera(group.gameObject, Camera.current)) {
+                    DrawGroup(group);
+                }
+            }
+
+            // A selected group shows its direct members at full strength. A selected Selectable in a group
+            // shows only that group's direct members. Otherwise every Selectable is shown, like Unity's.
+            NavigationGroup focus = null;
+            bool groupSelected = false;
+            var activeTransform = Selection.activeTransform;
+            if (!editingProfile && activeTransform != null) {
+                if (activeTransform.TryGetComponent(out NavigationGroup group) && group.isActiveAndEnabled) {
+                    focus = group;
+                    groupSelected = true;
+                }
+                else if (activeTransform.TryGetComponent(out Selectable _)) {
+                    focus = NavigationGroup.ScopeOf(activeTransform);
+                }
+            }
+
+            foreach (var selectable in _selectables) {
                 if (!StageUtility.IsGameObjectRenderedByCamera(selectable.gameObject, Camera.current)) {
                     continue;
                 }
 
-                Draw(selectable, editingProfile || Array.IndexOf(selected, selectable.transform) >= 0);
+                if (focus != null && NavigationGroup.ScopeOf(selectable.transform) != focus) {
+                    continue;
+                }
+
+                Draw(selectable, editingProfile || groupSelected || Array.IndexOf(selected, selectable.transform) >= 0);
             }
         }
 
@@ -108,7 +148,7 @@ namespace Onion.UI.Editor {
             }
 
             // Upgraded modes show what the upgrader computes; the rest keep Unity's own result.
-            bool upgraded = NavigationUpgrader.TryResolve(selectable, out var navigation);
+            bool upgraded = NavigationUpgrader.TryResolve(selectable, out var navigation, _entered);
             var left = upgraded ? navigation.selectOnLeft : selectable.FindSelectableOnLeft();
             var right = upgraded ? navigation.selectOnRight : selectable.FindSelectableOnRight();
             var up = upgraded ? navigation.selectOnUp : selectable.FindSelectableOnUp();
@@ -120,26 +160,34 @@ namespace Onion.UI.Editor {
             float alpha = active ? 1f : 0.4f;
 
             Handles.color = isExplicit ? new Color(0.65f, 0.45f, 0.9f, alpha) : new Color(1f, 0.6f, 0.2f, alpha);
-            DrawArrow(Vector2.left, selectable, left);
-            DrawArrow(Vector2.up, selectable, up);
+            DrawArrow(Vector2.left, selectable, left, _entered[0]);
+            DrawArrow(Vector2.up, selectable, up, _entered[2]);
 
             Handles.color = isExplicit ? new Color(0.3f, 0.6f, 1f, alpha) : new Color(1f, 0.9f, 0.1f, alpha);
-            DrawArrow(Vector2.right, selectable, right);
-            DrawArrow(Vector2.down, selectable, down);
+            DrawArrow(Vector2.right, selectable, right, _entered[1]);
+            DrawArrow(Vector2.down, selectable, down, _entered[3]);
         }
 
-        // Mirrors Unity's SelectableEditor.DrawNavigationArrow.
-        private static void DrawArrow(Vector2 direction, Selectable from, Selectable to) {
+        // Mirrors Unity's SelectableEditor.DrawNavigationArrow. A move that enters a group points at the group's box.
+        private static void DrawArrow(Vector2 direction, Selectable from, Selectable to, NavigationGroup group) {
             if (from == null || to == null) {
                 return;
             }
 
             var fromTransform = from.transform;
-            var toTransform = to.transform;
+            Transform toTransform;
+            Rect toRect;
+            if (group != null && TryGetBox(group, out toRect)) {
+                toTransform = group.transform;
+            }
+            else {
+                toTransform = to.transform;
+                toRect = RectOf(toTransform);
+            }
 
             var sideDirection = new Vector2(direction.y, -direction.x);
-            var fromPoint = fromTransform.TransformPoint(GetPointOnRectEdge(fromTransform as RectTransform, direction));
-            var toPoint = toTransform.TransformPoint(GetPointOnRectEdge(toTransform as RectTransform, -direction));
+            var fromPoint = fromTransform.TransformPoint(GetPointOnRectEdge(RectOf(fromTransform), direction));
+            var toPoint = toTransform.TransformPoint(GetPointOnRectEdge(toRect, -direction));
             float fromSize = HandleUtility.GetHandleSize(fromPoint) * 0.05f;
             float toSize = HandleUtility.GetHandleSize(toPoint) * 0.05f;
             fromPoint += fromTransform.TransformDirection(sideDirection) * fromSize;
@@ -154,16 +202,115 @@ namespace Onion.UI.Editor {
             Handles.DrawAAPolyLine(ArrowThickness, toPoint, toPoint + toTransform.rotation * (-direction + sideDirection) * toSize * ArrowHeadSize);
         }
 
-        private static Vector3 GetPointOnRectEdge(RectTransform rect, Vector2 direction) {
-            if (rect == null) {
-                return Vector3.zero;
-            }
+        private static Rect RectOf(Transform transform) {
+            return transform is RectTransform rectTransform ? rectTransform.rect : default;
+        }
 
+        private static Vector3 GetPointOnRectEdge(Rect rect, Vector2 direction) {
             if (direction != Vector2.zero) {
                 direction /= Mathf.Max(Mathf.Abs(direction.x), Mathf.Abs(direction.y));
             }
 
-            return rect.rect.center + Vector2.Scale(rect.rect.size, direction * 0.5f);
+            return rect.center + Vector2.Scale(rect.size, direction * 0.5f);
+        }
+
+        // Contain = solid outline, Pass Through = dashed.
+        private static void DrawGroup(NavigationGroup group) {
+            if (!TryGetBox(group, out var box)) {
+                return;
+            }
+
+            var transform = group.transform;
+            var a = transform.TransformPoint(new Vector3(box.xMin, box.yMin));
+            var b = transform.TransformPoint(new Vector3(box.xMax, box.yMin));
+            var c = transform.TransformPoint(new Vector3(box.xMax, box.yMax));
+            var d = transform.TransformPoint(new Vector3(box.xMin, box.yMax));
+
+            Handles.color = GroupColor;
+            if (group.boundary == NavigationBoundary.Contain) {
+                Handles.DrawAAPolyLine(GroupThickness, a, b, c, d, a);
+            }
+            else {
+                DrawDashedLine(a, b);
+                DrawDashedLine(b, c);
+                DrawDashedLine(c, d);
+                DrawDashedLine(d, a);
+            }
+        }
+
+        private static void DrawDashedLine(Vector3 from, Vector3 to) {
+            float length = Vector3.Distance(from, to);
+            float dash = HandleUtility.GetHandleSize(from) * GroupDash;
+            if (length <= 0f || dash <= 0f) {
+                return;
+            }
+
+            var step = (to - from) / length;
+            for (float start = 0f; start < length; start += dash * 2f) {
+                Handles.DrawAAPolyLine(GroupThickness, from + step * start, from + step * Mathf.Min(start + dash, length));
+            }
+        }
+
+        /// <summary>
+        /// The group's visible area in its local space: the bounds of its direct member Selectables and of its
+        /// child groups' boxes, plus a margin. False when it has no active member. Cached per repaint.
+        /// </summary>
+        private static bool TryGetBox(NavigationGroup group, out Rect box) {
+            if (_boxes.TryGetValue(group, out var cached)) {
+                box = cached ?? default;
+                return cached.HasValue;
+            }
+
+            var space = group.transform;
+            var min = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+            var max = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
+
+            foreach (var selectable in _selectables) {
+                if (selectable.transform is not RectTransform rectTransform || NavigationGroup.ScopeOf(rectTransform) != group) {
+                    continue;
+                }
+
+                rectTransform.GetWorldCorners(_corners);
+                Encapsulate(space, ref min, ref max);
+            }
+
+            foreach (var child in NavigationGroup.activeGroups) {
+                if (child.parent != group || !TryGetBox(child, out var childBox)) {
+                    continue;
+                }
+
+                var childSpace = child.transform;
+                _corners[0] = childSpace.TransformPoint(new Vector3(childBox.xMin, childBox.yMin));
+                _corners[1] = childSpace.TransformPoint(new Vector3(childBox.xMax, childBox.yMin));
+                _corners[2] = childSpace.TransformPoint(new Vector3(childBox.xMax, childBox.yMax));
+                _corners[3] = childSpace.TransformPoint(new Vector3(childBox.xMin, childBox.yMax));
+                Encapsulate(space, ref min, ref max);
+            }
+
+            if (min.x > max.x) {
+                _boxes[group] = null;
+                box = default;
+                return false;
+            }
+
+            // A constant on-screen margin, converted to the group's local units.
+            float margin = HandleUtility.GetHandleSize(space.TransformPoint((min + max) * 0.5f)) * GroupMargin;
+            var scale = space.lossyScale;
+            var padding = new Vector2(
+                margin / Mathf.Max(Mathf.Abs(scale.x), 1e-5f),
+                margin / Mathf.Max(Mathf.Abs(scale.y), 1e-5f));
+
+            box = Rect.MinMaxRect(min.x - padding.x, min.y - padding.y, max.x + padding.x, max.y + padding.y);
+            _boxes[group] = box;
+            return true;
+        }
+
+        private static void Encapsulate(Transform space, ref Vector2 min, ref Vector2 max) {
+            foreach (var corner in _corners) {
+                Vector2 point = space.InverseTransformPoint(corner);
+                min = Vector2.Min(min, point);
+                max = Vector2.Max(max, point);
+            }
         }
     }
 }

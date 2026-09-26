@@ -14,9 +14,9 @@ namespace Onion.UI.Navigation {
     }
 
     /// <summary>
-    /// Limits upgraded navigation to the Selectables under this object. From outside, the group is
-    /// considered as one rect; entering it selects <see cref="defaultSelectable"/> or the member
-    /// closest in the move direction.
+    /// Limits upgraded navigation to the Selectables under this object. From outside, its members are
+    /// candidates as usual; picking one enters the group, which selects <see cref="defaultSelectable"/>
+    /// if set, otherwise the picked member.
     /// </summary>
     [AddComponentMenu("Onion/UI/Navigation Group")]
     [RequireComponent(typeof(RectTransform))]
@@ -24,7 +24,7 @@ namespace Onion.UI.Navigation {
     public sealed class NavigationGroup : MonoBehaviour {
         private static readonly List<NavigationGroup> _activeGroups = new();
 
-        [Tooltip("Selected when navigation enters this group.\nWhen empty, the member closest in the move direction is selected.")]
+        [Tooltip("Selected when navigation enters this group.\nWhen empty, the member picked by the move is selected.")]
         public Selectable defaultSelectable;
 
         [Tooltip("Contain = navigation stops at the group's edge.\nPass Through = when nothing is found inside, the search continues outside the group.")]
