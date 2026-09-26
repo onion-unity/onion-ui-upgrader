@@ -24,11 +24,17 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           BOT: copilot-pull-request-reviewer[bot]
+        # Copilot's review doesn't trigger pull_request_review, so wait for it here.
         run: |
-          ids=$(gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
-            --jq ".[] | select(.user.login == \"$BOT\" and .commit_id == \"$HEAD\") | .id")
-          if [ -z "$ids" ]; then
-            echo "::error::Copilot has not reviewed $HEAD yet."
-            exit 1
-          fi
-          echo "Copilot reviewed $HEAD."
+          for i in $(seq 1 30); do   # 30s x 30 = up to 15 min
+            ids=$(gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
+              --jq ".[] | select(.user.login == \"$BOT\" and .commit_id == \"$HEAD\") | .id")
+            if [ -n "$ids" ]; then
+              echo "Copilot reviewed $HEAD."
+              exit 0
+            fi
+            echo "Waiting for Copilot review of $HEAD... ($i/30)"
+            sleep 30
+          done
+          echo "::error::Copilot did not review $HEAD within 15 minutes."
+          exit 1
