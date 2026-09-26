@@ -12,7 +12,7 @@ To check that the Runtime code compiles without opening Unity, invoke Unity's bu
 
 ## Project direction
 
-The goal is to upgrade UGUI `Selectable` navigation without subclassing `Selectable`, because Button, Toggle, Slider, etc. already derive from it. Known limitations being addressed: Explicit navigation doesn't adapt to runtime changes, and Automatic/Horizontal/Vertical can pick unintended targets. Unity's `FindSelectable` considers every Selectable in the scene and scores by `dot / distance²`. Per-group navigation is the next step after that. The user is designing it from scratch, and the old `NavigationGroup` skeleton was deleted on purpose.
+The goal is to upgrade UGUI `Selectable` navigation without subclassing `Selectable`, because Button, Toggle, Slider, etc. already derive from it. Known limitations being addressed: Explicit navigation doesn't adapt to runtime changes, and Automatic/Horizontal/Vertical can pick unintended targets. Unity's `FindSelectable` considers every Selectable in the scene and scores by `dot / distance²`. Per-group navigation is handled by `NavigationGroup` (see below).
 
 ## NavigationUpgrader
 
@@ -35,11 +35,20 @@ The goal is to upgrade UGUI `Selectable` navigation without subclassing `Selecta
 - This design intentionally differs from onion-scene-management's settings in these ways: the main asset is looked up by config key instead of scanning Preloaded Assets, `hideFlags` are not changed on the asset, and nothing is created in batch mode.
 - The namespace `Onion.UI.Navigation` shadows the type `UnityEngine.UI.Navigation`, so files in it use the alias `UINavigation`.
 
+## NavigationGroup
+
+`Runtime/Navigation/NavigationGroup.cs` is a public, non-Selectable container component (requires a RectTransform). It only affects upgraded modes and does nothing while the upgrade is off. Explicit slots can't reference groups, and the user decided they don't need to.
+- Scope: a Selectable belongs to the nearest enabled group on itself or its ancestors (`ScopeOf`), or to the root (null). Upgraded navigation only considers Selectables in the origin's scope, plus the scope's direct child groups, each as one rect (its RectTransform). Groups register themselves in a static list on enable.
+- `boundary`: `Contain` (default, the user's choice) stops at the group's edge. `PassThrough` searches the parent scope when nothing is found inside, skipping the group being left, because its own rect can lie ahead of the origin. Wrap-around happens inside the current scope first, so a wrapping group never passes through.
+- Entering a group: `defaultSelectable` if active and interactable, otherwise a search among the group's members from the origin's rect in the move direction, with the tolerance relaxed to 90° and no wrap. Nested groups are entered recursively. If nothing is found, that direction is empty. The result is written into the Explicit slot as a Selectable, so no re-selection happens (which would hit `EventSystem`'s "already selecting" guard).
+- Dropped on purpose, for now: anchor Selectables, group-to-group links, `selectOnEnable`, `restoreOnDisable`, remembering the last selection.
+
 ## Deferred optimizations
 
 Not done yet, by the user's choice. `NavigationUpgrader` recomputes all four neighbors every `LateUpdate` while something is selected. That costs about 4n `GetLocalRect` calls per frame for n Selectables, each with 1 `GetWorldCorners` and 4 `InverseTransformPoint` native calls.
 - Compute each candidate's local rect once per frame and share it across the four directions, instead of recomputing it inside every `FindNeighbor` call. This cuts the rect work to 1/4.
 - Transform corners with `origin.transform.worldToLocalMatrix` fetched once and `MultiplyPoint3x4`, instead of calling `InverseTransformPoint` per corner. This leaves about one native call (`GetWorldCorners`) per candidate.
+- `NavigationGroup.ScopeOf` walks each candidate's ancestors on every search (and again per Pass Through level). Cache it per candidate per frame together with the rect.
 
 ## Known limitations
 

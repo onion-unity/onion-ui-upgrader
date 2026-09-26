@@ -18,13 +18,17 @@ namespace Onion.UI.Navigation {
         private int _furthest;
         private float _furthestScore;
 
-        internal NeighborSearch(Rect from, Vector2 direction, bool wrap, NavigationProfile profile) {
+        internal NeighborSearch(Rect from, Vector2 direction, bool wrap, NavigationProfile profile)
+            : this(from, direction, wrap, profile.directionTolerance, profile.alignmentPower) {
+        }
+
+        internal NeighborSearch(Rect from, Vector2 direction, bool wrap, float maxAngle, float alignmentPower) {
             _from = from;
             _direction = direction;
             _horizontal = direction.x != 0;
             _wrap = wrap;
-            _maxAngle = profile.directionTolerance;
-            _alignmentPower = profile.alignmentPower;
+            _maxAngle = maxAngle;
+            _alignmentPower = alignmentPower;
 
             _best = -1;
             _bestCost = float.PositiveInfinity;

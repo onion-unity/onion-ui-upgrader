@@ -144,23 +144,78 @@ namespace Onion.UI.Navigation {
         }
 
         private static Selectable FindNeighbor(Selectable origin, Rect from, Vector2 direction, bool wrap, NavigationProfile profile, int count) {
-            var search = new NeighborSearch(from, direction, wrap, profile);
+            var scope = NavigationGroup.ScopeOf(origin.transform);
+            int index = Search(origin, scope, null, new NeighborSearch(from, direction, wrap, profile), count);
 
-            for (int i = 0; i < count; i++) {
-                var candidate = _candidates[i];
-                if (candidate == origin || !candidate.IsInteractable() || candidate.navigation.mode == UINavigation.Mode.None) {
-                    continue;
-                }
-
-                if (candidate.transform is not RectTransform rectTransform) {
-                    continue;
-                }
-
-                search.Consider(i, GetLocalRect(origin.transform, rectTransform));
+            // Nothing inside a Pass Through group: continue in its parent scope, where the group itself
+            // is a candidate too and must be skipped.
+            while (index < 0 && scope != null && scope.boundary == NavigationBoundary.PassThrough) {
+                var leaving = scope;
+                scope = leaving.parent;
+                index = Search(origin, scope, leaving, new NeighborSearch(from, direction, wrap, profile), count);
             }
 
-            int index = search.result;
-            return index >= 0 ? _candidates[index] : null;
+            return Pick(origin, from, direction, profile, index, count);
+        }
+
+        // Considers the Selectables directly in the scope and its direct child groups, each group as one rect.
+        // Indices below count are Selectables, the rest are groups.
+        private static int Search(Selectable origin, NavigationGroup scope, NavigationGroup excluded, NeighborSearch search, int count) {
+            for (int i = 0; i < count; i++) {
+                var candidate = _candidates[i];
+                if (candidate == origin || !IsCandidate(candidate)) {
+                    continue;
+                }
+
+                if (NavigationGroup.ScopeOf(candidate.transform) != scope) {
+                    continue;
+                }
+
+                search.Consider(i, GetLocalRect(origin.transform, (RectTransform)candidate.transform));
+            }
+
+            var groups = NavigationGroup.activeGroups;
+            for (int i = 0; i < groups.Count; i++) {
+                var group = groups[i];
+                if (group == excluded || group.parent != scope) {
+                    continue;
+                }
+
+                search.Consider(count + i, GetLocalRect(origin.transform, (RectTransform)group.transform));
+            }
+
+            return search.result;
+        }
+
+        private static Selectable Pick(Selectable origin, Rect from, Vector2 direction, NavigationProfile profile, int index, int count) {
+            if (index < 0) {
+                return null;
+            }
+
+            if (index < count) {
+                return _candidates[index];
+            }
+
+            return Enter(origin, from, direction, profile, NavigationGroup.activeGroups[index - count], count);
+        }
+
+        // The group's default if usable, otherwise its member closest in the move direction. Any angle is
+        // accepted there, since only the group itself had to be within the tolerance.
+        private static Selectable Enter(Selectable origin, Rect from, Vector2 direction, NavigationProfile profile, NavigationGroup group, int count) {
+            var selectable = group.defaultSelectable;
+            if (selectable != null && selectable.isActiveAndEnabled && IsCandidate(selectable)) {
+                return selectable;
+            }
+
+            var search = new NeighborSearch(from, direction, false, 90f, profile.alignmentPower);
+            int index = Search(origin, group, null, search, count);
+            return Pick(origin, from, direction, profile, index, count);
+        }
+
+        private static bool IsCandidate(Selectable selectable) {
+            return selectable.IsInteractable()
+                && selectable.navigation.mode != UINavigation.Mode.None
+                && selectable.transform is RectTransform;
         }
 
         private static Rect GetLocalRect(Transform space, RectTransform rectTransform) {
