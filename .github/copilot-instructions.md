@@ -5,7 +5,7 @@
 ## 프로젝트
 
 - `com.onion.uiupgrader`: UGUI `Selectable`을 상속하지 않고 네비게이션을 개선하는 Unity 6 (6000.0) UPM 패키지.
-- 자동 테스트/CI 없음. 검증은 Unity Editor Play Mode에서 수동으로 한다. 그래서 리뷰가 유일한 자동 검사다.
+- 자동 테스트와 빌드/동작 검증 CI는 없다. Copilot 리뷰 게이트 워크플로만 GitHub Actions로 실행하며, 검증은 Unity Editor Play Mode에서 수동으로 한다.
 - `Runtime/` (`Onion.UI.Runtime`), `Editor/` (`Onion.UI.Editor`, Editor 전용). 네임스페이스는 폴더별 (`Onion.UI.Navigation` 등).
 
 ## 코드 규칙
