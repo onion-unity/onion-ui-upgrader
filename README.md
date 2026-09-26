@@ -52,7 +52,7 @@ Other behaviors:
 
 ## Navigation Profile
 
-Create additional profiles from **Assets > Create > Onion > UI > Navigation Profile**.
+Create additional profiles from **Assets > Create > Onion > UI > Navigation Profile**, and assign them to a [Navigation Group](#navigation-group) to tune one area of the UI differently.
 
 | Setting | Description |
 | --- | --- |
@@ -73,9 +73,13 @@ By default, upgraded navigation considers every Selectable in the scene. Add **A
 | Setting | Description |
 | --- | --- |
 | **Default Selectable** | Selected when navigation enters the group. When empty, or when it is inactive or not interactable, the member picked by the move is selected. |
+| **Remember Last Selection** | Entering the group selects the member that was selected last, before Default Selectable. Useful for tabs and panels you leave and come back to. |
+| **Select On Enable** | When the group is enabled in Play Mode, its entry (the last selection when remembered, otherwise Default Selectable) is selected on the next frame. Useful for popups. If several groups are enabled at once, the one enabled last wins. |
 | **Boundary** | `Contain` (default): navigation stops at the group's edge. `Pass Through`: when nothing is found inside, the search continues in the parent group or the scene. |
+| **Wrap Around** | `Horizontal` / `Vertical` / `Both`: moving past the last member on that axis wraps to the other side, in any navigation mode. This is added to each Selectable's own Wrap Around. |
+| **Profile** | The Navigation Profile used inside the group. When empty, the parent group's profile is used, and at the root the project-wide one. |
 
-When nested groups are entered at once, the outermost group's Default Selectable is tried first. Wrap Around stays inside the current group, so a wrapping Selectable never passes through.
+When nested groups are entered at once, the outermost group is tried first. Wrap Around stays inside the current group, so a group never passes through on an axis it wraps on.
 
 Groups only affect upgraded modes (Automatic / Horizontal / Vertical) and do nothing while the upgrade is off. Explicit slots can't target a group.
 

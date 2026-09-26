@@ -22,6 +22,7 @@ namespace Onion.UI.Navigation {
         private Selectable _target;
         private UINavigation _originalNavigation;
         private UINavigation _appliedNavigation;
+        private Selectable _selected;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Initialize() {
@@ -32,6 +33,9 @@ namespace Onion.UI.Navigation {
         }
 
         private void Update() {
+            // Taken even while off, so a group enabled then doesn't select later when the upgrade is turned on.
+            var entry = TakePendingEntry();
+
             // Upgrade turned off (or no profile): leave every Selectable to Unity.
             var profile = NavigationSettings.profile;
             if (profile == null) {
@@ -40,8 +44,17 @@ namespace Onion.UI.Navigation {
             }
 
             var eventSystem = EventSystem.current;
+            if (entry != null && eventSystem != null) {
+                eventSystem.SetSelectedGameObject(entry.gameObject);
+            }
+
             var selected = eventSystem != null ? eventSystem.currentSelectedGameObject : null;
             var selectable = selected != null ? selected.GetComponent<Selectable>() : null;
+
+            if (selectable != _selected) {
+                _selected = selectable;
+                RememberSelection(selectable);
+            }
 
             if (selectable != _target) {
                 Release();
@@ -80,6 +93,49 @@ namespace Onion.UI.Navigation {
         // Navigation.Equals ignores wrapAround, but so does the navigation setter, so it can't change on its own.
         private bool IsChangedExternally() {
             return !_target.navigation.Equals(_appliedNavigation);
+        }
+
+        // Every group the selection is under records it, so entering an outer group can restore a nested selection.
+        private static void RememberSelection(Selectable selectable) {
+            if (selectable == null) {
+                return;
+            }
+
+            for (var group = NavigationGroup.ScopeOf(selectable.transform); group != null; group = group.parent) {
+                group.lastSelected = selectable;
+            }
+        }
+
+        // The entry of the most recently enabled group waiting for Select On Enable, or null.
+        private static Selectable TakePendingEntry() {
+            Selectable entry = null;
+            foreach (var group in NavigationGroup.activeGroups) {
+                if (!group.selectPending) {
+                    continue;
+                }
+
+                group.selectPending = false;
+                var candidate = EntryOf(group);
+                if (candidate != null) {
+                    entry = candidate;
+                }
+            }
+
+            return entry;
+        }
+
+        // The last selection when remembered and still usable, else the default when usable, else null.
+        private static Selectable EntryOf(NavigationGroup group) {
+            var last = group.lastSelected;
+            if (group.rememberSelection && IsUsable(last) && last.transform.IsChildOf(group.transform)) {
+                return last;
+            }
+
+            return IsUsable(group.defaultSelectable) ? group.defaultSelectable : null;
+        }
+
+        private static bool IsUsable(Selectable selectable) {
+            return selectable != null && selectable.isActiveAndEnabled && IsCandidate(selectable);
         }
 
         /// <summary>
@@ -183,13 +239,13 @@ namespace Onion.UI.Navigation {
 
         private static Selectable FindNeighbor(Selectable origin, Rect from, Vector2 direction, bool wrap, NavigationProfile profile, int count, NavigationGroup[] entered, int slot) {
             var scope = NavigationGroup.ScopeOf(origin.transform);
-            int index = Search(origin, scope, null, new NeighborSearch(from, direction, wrap, profile), count);
+            int index = Search(origin, scope, null, SearchIn(scope, from, direction, wrap, profile), count);
 
             // Nothing inside a Pass Through group: continue in its parent scope, without the group's own members.
             while (index < 0 && scope != null && scope.boundary == NavigationBoundary.PassThrough) {
                 var leaving = scope;
                 scope = leaving.parent;
-                index = Search(origin, scope, leaving, new NeighborSearch(from, direction, wrap, profile), count);
+                index = Search(origin, scope, leaving, SearchIn(scope, from, direction, wrap, profile), count);
             }
 
             if (index < 0) {
@@ -202,6 +258,24 @@ namespace Onion.UI.Navigation {
             }
 
             return selectable;
+        }
+
+        // The scope's own settings: its wrap axes on top of the Selectable's own wrap, and the nearest profile
+        // set on it or its ancestors, falling back to the project-wide one.
+        private static NeighborSearch SearchIn(NavigationGroup scope, Rect from, Vector2 direction, bool wrap, NavigationProfile profile) {
+            if (scope != null) {
+                var axis = direction.x != 0 ? NavigationWrap.Horizontal : NavigationWrap.Vertical;
+                wrap |= (scope.wrapAround & axis) != 0;
+            }
+
+            for (var group = scope; group != null; group = group.parent) {
+                if (group.profile != null) {
+                    profile = group.profile;
+                    break;
+                }
+            }
+
+            return new NeighborSearch(from, direction, wrap, profile);
         }
 
         // Considers every Selectable under the scope, including those in its child groups.
@@ -232,8 +306,8 @@ namespace Onion.UI.Navigation {
             return search.result;
         }
 
-        // When the picked Selectable is in a group below the scope, the move enters that group: the first usable
-        // default from the outermost group inward wins, otherwise the picked Selectable itself.
+        // When the picked Selectable is in a group below the scope, the move enters that group: the first entry
+        // (remembered, then default) from the outermost group inward wins, otherwise the picked Selectable itself.
         private static Selectable Enter(Selectable picked, NavigationGroup scope, out NavigationGroup entered) {
             _chain.Clear();
             for (var group = NavigationGroup.ScopeOf(picked.transform); group != scope; group = group.parent) {
@@ -242,8 +316,8 @@ namespace Onion.UI.Navigation {
 
             entered = _chain.Count > 0 ? _chain[_chain.Count - 1] : null;
             for (int i = _chain.Count - 1; i >= 0; i--) {
-                var selectable = _chain[i].defaultSelectable;
-                if (selectable != null && selectable.isActiveAndEnabled && IsCandidate(selectable)) {
+                var selectable = EntryOf(_chain[i]);
+                if (selectable != null) {
                     return selectable;
                 }
             }
