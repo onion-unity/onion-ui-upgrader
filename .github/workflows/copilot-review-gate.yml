@@ -1,0 +1,34 @@
+name: Copilot Review Gate
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: copilot-review-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  copilot-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Copilot reviewed the head commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          BOT: copilot-pull-request-reviewer[bot]
+        run: |
+          ids=$(gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
+            --jq ".[] | select(.user.login == \"$BOT\" and .commit_id == \"$HEAD\") | .id")
+          if [ -z "$ids" ]; then
+            echo "::error::Copilot has not reviewed $HEAD yet."
+            exit 1
+          fi
+          echo "Copilot reviewed $HEAD."
