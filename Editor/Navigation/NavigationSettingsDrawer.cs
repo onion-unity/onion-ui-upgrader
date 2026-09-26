@@ -24,6 +24,8 @@ namespace Onion.UI.Editor {
                     CreateProfile(profile);
                 }
             }
+
+            EditorGUILayout.PropertyField(navigation.FindPropertyRelative(nameof(NavigationSettings.recoverSelection)));
         }
 
         private static void CreateProfile(SerializedProperty profile) {
