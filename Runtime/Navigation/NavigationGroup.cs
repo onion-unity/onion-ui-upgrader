@@ -19,6 +19,8 @@ namespace Onion.UI.Navigation {
     /// if set, otherwise the picked member.
     /// </summary>
     [AddComponentMenu("Onion/UI/Navigation Group")]
+    // Registers in Edit Mode too, so the Scene view visualizer can find the groups.
+    [ExecuteAlways]
     [RequireComponent(typeof(RectTransform))]
     [DisallowMultipleComponent]
     public sealed class NavigationGroup : MonoBehaviour {

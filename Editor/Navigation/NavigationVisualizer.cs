@@ -36,6 +36,7 @@ namespace Onion.UI.Editor {
 
         private static readonly NavigationGroup[] _entered = new NavigationGroup[4];
         private static readonly Dictionary<NavigationGroup, Rect?> _boxes = new();
+        private static readonly HashSet<NavigationGroup> _shownGroups = new();
         private static readonly Vector3[] _corners = new Vector3[4];
         private static Selectable[] _selectables;
 
@@ -81,6 +82,15 @@ namespace Onion.UI.Editor {
         static NavigationVisualizer() {
             _enabled = EditorPrefs.GetBool(EnabledKey, false);
             SceneView.duringSceneGui += OnSceneGUI;
+            ObjectChangeEvents.changesPublished += OnObjectChanged;
+        }
+
+        // The Scene view only repaints on its own events, so inspector edits (a group's boundary, a
+        // Selectable's mode, ...) would otherwise show only after the mouse moves over it.
+        private static void OnObjectChanged(ref ObjectChangeEventStream stream) {
+            if (_enabled) {
+                SceneView.RepaintAll();
+            }
         }
 
         private static void OnSceneGUI(SceneView view) {
@@ -107,17 +117,14 @@ namespace Onion.UI.Editor {
 
             _selectables = Selectable.allSelectablesArray;
             _boxes.Clear();
-
-            foreach (var group in NavigationGroup.activeGroups) {
-                if (StageUtility.IsGameObjectRenderedByCamera(group.gameObject, Camera.current)) {
-                    DrawGroup(group);
-                }
-            }
+            _shownGroups.Clear();
 
             // A selected group shows its direct members at full strength. A selected Selectable in a group
             // shows only that group's direct members. Otherwise every Selectable is shown, like Unity's.
+            // Any other object (e.g. a container of groups) shows every arrow, and the boxes of every group under it.
             NavigationGroup focus = null;
             bool groupSelected = false;
+            Transform overview = null;
             var activeTransform = Selection.activeTransform;
             if (!editingProfile && activeTransform != null) {
                 if (activeTransform.TryGetComponent(out NavigationGroup group) && group.isActiveAndEnabled) {
@@ -126,6 +133,9 @@ namespace Onion.UI.Editor {
                 }
                 else if (activeTransform.TryGetComponent(out Selectable _)) {
                     focus = NavigationGroup.ScopeOf(activeTransform);
+                }
+                else {
+                    overview = activeTransform;
                 }
             }
 
@@ -138,11 +148,34 @@ namespace Onion.UI.Editor {
                     continue;
                 }
 
-                Draw(selectable, editingProfile || groupSelected || Array.IndexOf(selected, selectable.transform) >= 0);
+                bool active = editingProfile || groupSelected || Array.IndexOf(selected, selectable.transform) >= 0;
+                Draw(selectable, active, collectGroups: active && overview == null);
+            }
+
+            // Boxes: every group while a profile is being edited; the groups under the selected object in the
+            // overview; otherwise the focused group plus the groups the full-strength arrows enter or land in.
+            if (editingProfile) {
+                _shownGroups.UnionWith(NavigationGroup.activeGroups);
+            }
+            else if (overview != null) {
+                foreach (var group in NavigationGroup.activeGroups) {
+                    if (group.transform.IsChildOf(overview)) {
+                        _shownGroups.Add(group);
+                    }
+                }
+            }
+            else if (focus != null) {
+                _shownGroups.Add(focus);
+            }
+
+            foreach (var group in _shownGroups) {
+                if (StageUtility.IsGameObjectRenderedByCamera(group.gameObject, Camera.current)) {
+                    DrawGroup(group);
+                }
             }
         }
 
-        private static void Draw(Selectable selectable, bool active) {
+        private static void Draw(Selectable selectable, bool active, bool collectGroups) {
             if (selectable.navigation.mode == UINavigation.Mode.None) {
                 return;
             }
@@ -166,6 +199,22 @@ namespace Onion.UI.Editor {
             Handles.color = isExplicit ? new Color(0.3f, 0.6f, 1f, alpha) : new Color(1f, 0.9f, 0.1f, alpha);
             DrawArrow(Vector2.right, selectable, right, _entered[1]);
             DrawArrow(Vector2.down, selectable, down, _entered[3]);
+
+            if (collectGroups) {
+                CollectGroup(left, _entered[0]);
+                CollectGroup(right, _entered[1]);
+                CollectGroup(up, _entered[2]);
+                CollectGroup(down, _entered[3]);
+            }
+        }
+
+        // The group an arrow enters, or else the group its target already belongs to (e.g. a Pass Through
+        // move back out into the parent group).
+        private static void CollectGroup(Selectable target, NavigationGroup entered) {
+            var group = entered != null ? entered : target != null ? NavigationGroup.ScopeOf(target.transform) : null;
+            if (group != null) {
+                _shownGroups.Add(group);
+            }
         }
 
         // Mirrors Unity's SelectableEditor.DrawNavigationArrow. A move that enters a group points at the group's box.
