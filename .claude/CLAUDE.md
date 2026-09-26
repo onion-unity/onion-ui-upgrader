@@ -16,7 +16,7 @@ The goal is to upgrade UGUI `Selectable` navigation without subclassing `Selecta
 
 ## NavigationUpgrader
 
-`Runtime/Navigation/NavigationUpgrader.cs` is an internal `MonoBehaviour` auto-created at startup (`RuntimeInitializeOnLoadMethod`, `DontDestroyOnLoad`). Each `LateUpdate` it takes `EventSystem.current`'s selected `Selectable` and, only if that Selectable's mode is Automatic/Horizontal/Vertical, computes its neighbors with its own algorithm and writes them into `navigation` as Explicit. Unity then performs the actual move as usual. When the selection changes, the original navigation is restored, so at most one Selectable is modified at a time and scene data is never changed. Explicit/None Selectables are never touched; the developer's inspector setting is the switch.
+`Runtime/Navigation/NavigationUpgrader.cs` is an internal `MonoBehaviour` auto-created at startup (`RuntimeInitializeOnLoadMethod`, `DontDestroyOnLoad`). Each `Update`, at `[DefaultExecutionOrder(-10000)]` so it runs before `EventSystem.Update` (order 0) performs the move, it takes `EventSystem.current`'s selected `Selectable` and, only if that Selectable's mode is Automatic/Horizontal/Vertical, computes its neighbors with its own algorithm and writes them into `navigation` as Explicit. Unity then performs the actual move as usual. When the selection changes, the original navigation is restored, so at most one Selectable is modified at a time and scene data is never changed. Explicit/None Selectables are never touched; the developer's inspector setting is the switch.
 
 - Neighbor rule: lives in `NeighborSearch` (internal struct, pure rect math). The runtime upgrader and the Editor profile preview both use it, so keep all scoring there. Two separate steps:
   - **Detection (filter):** the candidate's **center** must lie beyond the origin's leading edge and within `directionTolerance` degrees, with the angle measured from the origin's rect (0° = center inside the origin's row/column). Using centers keeps 0° truly straight and makes the area exactly drawable.
@@ -45,16 +45,14 @@ The goal is to upgrade UGUI `Selectable` navigation without subclassing `Selecta
 
 ## Deferred optimizations
 
-Not done yet, by the user's choice. `NavigationUpgrader` recomputes all four neighbors every `LateUpdate` while something is selected. That costs about 4n `GetLocalRect` calls per frame for n Selectables, each with 1 `GetWorldCorners` and 4 `InverseTransformPoint` native calls.
-- Compute each candidate's local rect once per frame and share it across the four directions, instead of recomputing it inside every `FindNeighbor` call. This cuts the rect work to 1/4.
+`NavigationUpgrader` recomputes all four neighbors every `Update` while something is selected. Each candidate's local rect is computed at most once per `Resolve` (lazily, in `Search`, cached in `_rects`/`_hasRect`, which `CollectCandidates` clears) and shared across the four directions and Pass Through levels, so that's at most n `GetLocalRect` calls per frame, each with 1 `GetWorldCorners` and 4 `InverseTransformPoint` native calls. Still not done, by the user's choice:
 - Transform corners with `origin.transform.worldToLocalMatrix` fetched once and `MultiplyPoint3x4`, instead of calling `InverseTransformPoint` per corner. This leaves about one native call (`GetWorldCorners`) per candidate.
-- Each Pass Through level repeats the whole candidate loop (`IsChildOf` checks and rects). Caching each candidate's rect per frame covers most of it.
+- Each direction and Pass Through level still repeats the candidate loop's `IsChildOf` checks.
 
 ## Known limitations
 
-Also not addressed yet.
-- One-frame lag: Unity's `Selectable.OnMove` searches at the moment of input, inside `EventSystem.Update`. The upgrader's result comes from the previous frame's `LateUpdate`. If a candidate becomes non-interactable in this frame's `Update` before input is processed, it can still be navigated to. `Selectable.Navigate` only checks `IsActive()`, not interactability. Candidate fix: move the work to an `Update` with a very low `[DefaultExecutionOrder]` so it runs before `EventSystem.Update`.
-- Changing the selected Selectable's own `navigation` from a script while it is selected is lost. The upgrader overwrites it every frame from `_originalNavigation` and restores that old value on release.
+- Residual same-frame lag: Unity's `Selectable.OnMove` searches at the moment of input, inside `EventSystem.Update`. The upgrader now computes in an early `Update` (was the previous frame's `LateUpdate`, which also missed layout rebuilds and end-of-frame destroys). Changes made by scripts that run between it and `EventSystem.Update` in the same frame (order below 0, or order 0 scripts Unity happens to run before the EventSystem) are still missed; e.g. a candidate made non-interactable there can still be navigated to, since `Selectable.Navigate` only checks `IsActive()`. There is no hook at move time without subclassing, and a helper `IMoveHandler` on the Selectable would run after `Selectable.OnMove`.
+- Script changes to the selected Selectable's `navigation` are kept: each frame the upgrader compares the current value with what it last wrote (`_appliedNavigation`). If they differ, the new value becomes `_originalNavigation` (and tracking stops if its mode is no longer upgraded), and `Release` doesn't overwrite it. `Navigation.Equals` ignores `wrapAround`, but so does the `navigation` setter (`SetPropertyUtility.SetStruct`), so a wrap-only change can't be made anyway. A script setting exactly the value the upgrader wrote is indistinguishable and treated as unchanged.
 
 ## Assemblies and namespaces
 

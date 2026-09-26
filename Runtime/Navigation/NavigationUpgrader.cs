@@ -7,15 +7,21 @@ using UINavigation = UnityEngine.UI.Navigation;
 namespace Onion.UI.Navigation {
     [AddComponentMenu("")]
     [DisallowMultipleComponent]
+    // Runs before EventSystem.Update (default order 0), which performs the move, so the move uses this frame's result.
+    [DefaultExecutionOrder(-10000)]
     internal sealed class NavigationUpgrader : MonoBehaviour {
         private const string _instanceName = "[Navigation Upgrader]";
 
         private static readonly Vector3[] _corners = new Vector3[4];
         private static Selectable[] _candidates = new Selectable[64];
+        // Each candidate's rect in the origin's local space, computed on first use and shared by every direction.
+        private static Rect[] _rects = new Rect[64];
+        private static bool[] _hasRect = new bool[64];
         private static readonly List<NavigationGroup> _chain = new();
 
         private Selectable _target;
         private UINavigation _originalNavigation;
+        private UINavigation _appliedNavigation;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Initialize() {
@@ -25,7 +31,7 @@ namespace Onion.UI.Navigation {
             go.AddComponent<NavigationUpgrader>();
         }
 
-        private void LateUpdate() {
+        private void Update() {
             // Upgrade turned off (or no profile): leave every Selectable to Unity.
             var profile = NavigationSettings.profile;
             if (profile == null) {
@@ -44,10 +50,17 @@ namespace Onion.UI.Navigation {
                     _target = selectable;
                     _originalNavigation = selectable.navigation;
                 }
+            } else if (_target != null && IsChangedExternally()) {
+                // A script set the navigation while selected: that becomes the original to restore.
+                _originalNavigation = _target.navigation;
+                if (!IsUpgradable(_target)) {
+                    _target = null;
+                }
             }
 
             if (_target != null) {
-                _target.navigation = Resolve(_target, _originalNavigation, profile);
+                _appliedNavigation = Resolve(_target, _originalNavigation, profile);
+                _target.navigation = _appliedNavigation;
             }
         }
 
@@ -56,11 +69,17 @@ namespace Onion.UI.Navigation {
         }
 
         private void Release() {
-            if (_target != null) {
+            // Keep a value a script set since the last update instead of overwriting it.
+            if (_target != null && !IsChangedExternally()) {
                 _target.navigation = _originalNavigation;
             }
 
             _target = null;
+        }
+
+        // Navigation.Equals ignores wrapAround, but so does the navigation setter, so it can't change on its own.
+        private bool IsChangedExternally() {
+            return !_target.navigation.Equals(_appliedNavigation);
         }
 
         /// <summary>
@@ -151,10 +170,15 @@ namespace Onion.UI.Navigation {
         private static int CollectCandidates() {
             int selectableCount = Selectable.allSelectableCount;
             if (_candidates.Length < selectableCount) {
-                _candidates = new Selectable[Mathf.NextPowerOfTwo(selectableCount)];
+                int capacity = Mathf.NextPowerOfTwo(selectableCount);
+                _candidates = new Selectable[capacity];
+                _rects = new Rect[capacity];
+                _hasRect = new bool[capacity];
             }
 
-            return Selectable.AllSelectablesNoAlloc(_candidates);
+            int count = Selectable.AllSelectablesNoAlloc(_candidates);
+            System.Array.Clear(_hasRect, 0, count);
+            return count;
         }
 
         private static Selectable FindNeighbor(Selectable origin, Rect from, Vector2 direction, bool wrap, NavigationProfile profile, int count, NavigationGroup[] entered, int slot) {
@@ -197,7 +221,12 @@ namespace Onion.UI.Navigation {
                     continue;
                 }
 
-                search.Consider(i, GetLocalRect(origin.transform, (RectTransform)transform));
+                if (!_hasRect[i]) {
+                    _rects[i] = GetLocalRect(origin.transform, (RectTransform)transform);
+                    _hasRect[i] = true;
+                }
+
+                search.Consider(i, _rects[i]);
             }
 
             return search.result;
