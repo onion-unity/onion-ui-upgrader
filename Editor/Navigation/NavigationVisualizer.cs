@@ -88,6 +88,11 @@ namespace Onion.UI.Editor {
             var selected = Selection.transforms;
             // While a profile is being edited, nothing in the scene is selected, so show every arrow at full strength.
             bool editingProfile = Selection.activeObject is NavigationProfile;
+            // Nothing selected in the scene: draw nothing rather than a faint web of every arrow.
+            if (!editingProfile && selected.Length == 0) {
+                return;
+            }
+
             foreach (var selectable in Selectable.allSelectablesArray) {
                 if (!StageUtility.IsGameObjectRenderedByCamera(selectable.gameObject, Camera.current)) {
                     continue;
@@ -109,12 +114,16 @@ namespace Onion.UI.Editor {
             var up = upgraded ? navigation.selectOnUp : selectable.FindSelectableOnUp();
             var down = upgraded ? navigation.selectOnDown : selectable.FindSelectableOnDown();
 
-            // Same colors as Unity's visualizer.
-            Handles.color = new Color(1f, 0.6f, 0.2f, active ? 1f : 0.4f);
+            // Same colors as Unity's visualizer; Explicit uses purple / blue
+            // so hand-set links stand out.
+            bool isExplicit = selectable.navigation.mode == UINavigation.Mode.Explicit;
+            float alpha = active ? 1f : 0.4f;
+
+            Handles.color = isExplicit ? new Color(0.65f, 0.45f, 0.9f, alpha) : new Color(1f, 0.6f, 0.2f, alpha);
             DrawArrow(Vector2.left, selectable, left);
             DrawArrow(Vector2.up, selectable, up);
 
-            Handles.color = new Color(1f, 0.9f, 0.1f, active ? 1f : 0.4f);
+            Handles.color = isExplicit ? new Color(0.3f, 0.6f, 1f, alpha) : new Color(1f, 0.9f, 0.1f, alpha);
             DrawArrow(Vector2.right, selectable, right);
             DrawArrow(Vector2.down, selectable, down);
         }
