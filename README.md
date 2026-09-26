@@ -61,7 +61,23 @@ Create additional profiles from **Assets > Create > Onion > UI > Navigation Prof
 
 - **Reset** sets the profile to Unity's built-in behavior (`90°`, `0.25`).
 - **Preview** shows an example layout and which button gets selected in each direction. Hover a side of the preview to focus that direction.
-- **Visualize** draws the upgraded navigation arrows in the Scene view, like Unity's own Visualize button. Turning it on hides Unity's arrows so the two don't overlap.
+- **Visualize** draws the upgraded navigation arrows in the Scene view, like Unity's own Visualize button. Turning it on hides Unity's arrows so the two don't overlap. Navigation Groups related to the selection are outlined, and a move that enters a group points at the group.
+
+## Navigation Group
+
+By default, upgraded navigation considers every Selectable in the scene. Add **Add Component > Onion > UI > Navigation Group** to a UI object to limit navigation to the Selectables under it, such as a side menu, a popup, or an inventory grid.
+
+- A Selectable belongs to the nearest enabled group on itself or its parents. Moving from it only looks at Selectables in the same group, including those inside nested groups.
+- From outside, a group's members are candidates as usual. Picking one **enters** the group.
+
+| Setting | Description |
+| --- | --- |
+| **Default Selectable** | Selected when navigation enters the group. When empty, or when it is inactive or not interactable, the member picked by the move is selected. |
+| **Boundary** | `Contain` (default): navigation stops at the group's edge. `Pass Through`: when nothing is found inside, the search continues in the parent group or the scene. |
+
+When nested groups are entered at once, the outermost group's Default Selectable is tried first. Wrap Around stays inside the current group, so a wrapping Selectable never passes through.
+
+Groups only affect upgraded modes (Automatic / Horizontal / Vertical) and do nothing while the upgrade is off. Explicit slots can't target a group.
 
 ## Turning it off
 
