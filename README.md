@@ -86,3 +86,7 @@ Groups only affect upgraded modes (Automatic / Horizontal / Vertical) and do not
 ## Turning it off
 
 Uncheck the box in the **Navigation** header in **Project Settings > Onion > UI Upgrader**. Every Selectable then uses Unity's default navigation. The assigned profile is kept, so upgrading again restores the same behavior.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
