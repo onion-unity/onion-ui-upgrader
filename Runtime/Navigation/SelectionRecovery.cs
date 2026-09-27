@@ -13,7 +13,7 @@ namespace Onion.UI.Navigation {
     /// Owned and driven by <see cref="NavigationUpgrader"/>.
     /// </summary>
     internal sealed class SelectionRecovery {
-        // The dead zone input modules use to pick a move direction (BaseInputModule.DetermineMoveDirection).
+        // The dead zone StandaloneInputModule uses to pick a move direction (BaseInputModule.DetermineMoveDirection).
         private const float MoveDeadZone = 0.6f;
 
         private Selectable[] _candidates = new Selectable[64];
@@ -63,12 +63,11 @@ namespace Onion.UI.Navigation {
                 return false;
             }
 
-            Vector2 move;
             switch (eventSystem.currentInputModule) {
                 case StandaloneInputModule standalone:
                     var input = standalone.input;
-                    move = new Vector2(input.GetAxisRaw(standalone.horizontalAxis), input.GetAxisRaw(standalone.verticalAxis));
-                    break;
+                    var move = new Vector2(input.GetAxisRaw(standalone.horizontalAxis), input.GetAxisRaw(standalone.verticalAxis));
+                    return move.sqrMagnitude >= MoveDeadZone * MoveDeadZone;
 #if ONION_INPUTSYSTEM
                 case InputSystemUIInputModule inputSystem:
                     var reference = inputSystem.move;
@@ -76,14 +75,12 @@ namespace Onion.UI.Navigation {
                         return false;
                     }
 
-                    move = reference.action.ReadValue<Vector2>();
-                    break;
+                    // No dead zone of its own: any nonzero move is sent (the action's processors apply one).
+                    return reference.action.ReadValue<Vector2>().sqrMagnitude > 0f;
 #endif
                 default:
                     return false;
             }
-
-            return move.sqrMagnitude >= MoveDeadZone * MoveDeadZone;
         }
 
         // Input modules don't send events to inactive objects or disabled components, so these can't move either.
