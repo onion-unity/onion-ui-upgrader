@@ -269,11 +269,11 @@ namespace Onion.UI.Editor {
                 return;
             }
 
-            var transform = group.transform;
-            var a = transform.TransformPoint(new Vector3(box.xMin, box.yMin));
-            var b = transform.TransformPoint(new Vector3(box.xMax, box.yMin));
-            var c = transform.TransformPoint(new Vector3(box.xMax, box.yMax));
-            var d = transform.TransformPoint(new Vector3(box.xMin, box.yMax));
+            var toWorld = group.transform.localToWorldMatrix;
+            var a = toWorld.MultiplyPoint3x4(new Vector3(box.xMin, box.yMin));
+            var b = toWorld.MultiplyPoint3x4(new Vector3(box.xMax, box.yMin));
+            var c = toWorld.MultiplyPoint3x4(new Vector3(box.xMax, box.yMax));
+            var d = toWorld.MultiplyPoint3x4(new Vector3(box.xMin, box.yMax));
 
             Handles.color = GroupColor;
             if (group.boundary == NavigationBoundary.Contain) {
@@ -311,6 +311,7 @@ namespace Onion.UI.Editor {
             }
 
             var space = group.transform;
+            var toSpace = space.worldToLocalMatrix;
             var min = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
             var max = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
 
@@ -320,7 +321,7 @@ namespace Onion.UI.Editor {
                 }
 
                 rectTransform.GetWorldCorners(_corners);
-                Encapsulate(space, ref min, ref max);
+                Encapsulate(toSpace, ref min, ref max);
             }
 
             foreach (var child in NavigationGroup.activeGroups) {
@@ -328,12 +329,12 @@ namespace Onion.UI.Editor {
                     continue;
                 }
 
-                var childSpace = child.transform;
-                _corners[0] = childSpace.TransformPoint(new Vector3(childBox.xMin, childBox.yMin));
-                _corners[1] = childSpace.TransformPoint(new Vector3(childBox.xMax, childBox.yMin));
-                _corners[2] = childSpace.TransformPoint(new Vector3(childBox.xMax, childBox.yMax));
-                _corners[3] = childSpace.TransformPoint(new Vector3(childBox.xMin, childBox.yMax));
-                Encapsulate(space, ref min, ref max);
+                var fromChild = child.transform.localToWorldMatrix;
+                _corners[0] = fromChild.MultiplyPoint3x4(new Vector3(childBox.xMin, childBox.yMin));
+                _corners[1] = fromChild.MultiplyPoint3x4(new Vector3(childBox.xMax, childBox.yMin));
+                _corners[2] = fromChild.MultiplyPoint3x4(new Vector3(childBox.xMax, childBox.yMax));
+                _corners[3] = fromChild.MultiplyPoint3x4(new Vector3(childBox.xMin, childBox.yMax));
+                Encapsulate(toSpace, ref min, ref max);
             }
 
             if (min.x > max.x) {
@@ -354,9 +355,9 @@ namespace Onion.UI.Editor {
             return true;
         }
 
-        private static void Encapsulate(Transform space, ref Vector2 min, ref Vector2 max) {
+        private static void Encapsulate(Matrix4x4 toSpace, ref Vector2 min, ref Vector2 max) {
             foreach (var corner in _corners) {
-                Vector2 point = space.InverseTransformPoint(corner);
+                Vector2 point = toSpace.MultiplyPoint3x4(corner);
                 min = Vector2.Min(min, point);
                 max = Vector2.Max(max, point);
             }

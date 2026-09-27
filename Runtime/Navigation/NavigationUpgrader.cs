@@ -17,6 +17,11 @@ namespace Onion.UI.Navigation {
         // Each candidate's rect in the origin's local space, computed on first use and shared by every direction.
         private static Rect[] _rects = new Rect[64];
         private static bool[] _hasRect = new bool[64];
+        // Each candidate's index in _scopes (the innermost scope it is under), or -1 when it can't be picked.
+        private static int[] _levels = new int[64];
+        // The origin's scope, then each parent a Pass Through search can continue into (null = root).
+        private static readonly List<NavigationGroup> _scopes = new();
+        private static Matrix4x4 _toOrigin;
         private static readonly List<NavigationGroup> _chain = new();
 
         private Selectable _target;
@@ -184,7 +189,7 @@ namespace Onion.UI.Navigation {
             // Unity only wraps around in Horizontal/Vertical mode.
             bool wrap = original.wrapAround && mode != UINavigation.Mode.Automatic;
             var from = ((RectTransform)origin.transform).rect;
-            int count = CollectCandidates();
+            int count = CollectCandidates(origin);
 
             var navigation = original;
             navigation.mode = UINavigation.Mode.Explicit;
@@ -228,36 +233,67 @@ namespace Onion.UI.Navigation {
             return direction == Scrollbar.Direction.LeftToRight || direction == Scrollbar.Direction.RightToLeft;
         }
 
-        private static int CollectCandidates() {
+        // Also computes what every direction shares: the searchable scopes and each candidate's level in them.
+        private static int CollectCandidates(Selectable origin) {
             int selectableCount = Selectable.allSelectableCount;
             if (_candidates.Length < selectableCount) {
                 int capacity = Mathf.NextPowerOfTwo(selectableCount);
                 _candidates = new Selectable[capacity];
                 _rects = new Rect[capacity];
                 _hasRect = new bool[capacity];
+                _levels = new int[capacity];
             }
+
+            _scopes.Clear();
+            var scope = NavigationGroup.ScopeOf(origin.transform);
+            _scopes.Add(scope);
+            while (scope != null && scope.boundary == NavigationBoundary.PassThrough) {
+                scope = scope.parent;
+                _scopes.Add(scope);
+            }
+
+            _toOrigin = origin.transform.worldToLocalMatrix;
 
             int count = Selectable.AllSelectablesNoAlloc(_candidates);
             System.Array.Clear(_hasRect, 0, count);
+            for (int i = 0; i < count; i++) {
+                _levels[i] = LevelOf(_candidates[i], origin);
+            }
+
             return count;
         }
 
+        private static int LevelOf(Selectable candidate, Selectable origin) {
+            if (candidate == origin || !IsCandidate(candidate)) {
+                return -1;
+            }
+
+            var transform = candidate.transform;
+            for (int level = 0; level < _scopes.Count; level++) {
+                var scope = _scopes[level];
+                if (scope == null || transform.IsChildOf(scope.transform)) {
+                    return level;
+                }
+            }
+
+            return -1;
+        }
+
         private static Selectable FindNeighbor(Selectable origin, Rect from, Vector2 direction, bool wrap, NavigationProfile profile, int count, NavigationGroup[] entered, int slot) {
-            var scope = NavigationGroup.ScopeOf(origin.transform);
-            int index = Search(origin, scope, null, SearchIn(scope, from, direction, wrap, profile), count);
+            int level = 0;
+            int index = Search(level, SearchIn(_scopes[level], from, direction, wrap, profile), count);
 
             // Nothing inside a Pass Through group: continue in its parent scope, without the group's own members.
-            while (index < 0 && scope != null && scope.boundary == NavigationBoundary.PassThrough) {
-                var leaving = scope;
-                scope = leaving.parent;
-                index = Search(origin, scope, leaving, SearchIn(scope, from, direction, wrap, profile), count);
+            while (index < 0 && level + 1 < _scopes.Count) {
+                level++;
+                index = Search(level, SearchIn(_scopes[level], from, direction, wrap, profile), count);
             }
 
             if (index < 0) {
                 return null;
             }
 
-            var selectable = Enter(_candidates[index], scope, out var group);
+            var selectable = Enter(_candidates[index], _scopes[level], out var group);
             if (entered != null) {
                 entered[slot] = group;
             }
@@ -283,25 +319,16 @@ namespace Onion.UI.Navigation {
             return new NeighborSearch(from, direction, wrap, profile);
         }
 
-        // Considers every Selectable under the scope, including those in its child groups.
-        private static int Search(Selectable origin, NavigationGroup scope, NavigationGroup excluded, NeighborSearch search, int count) {
+        // Considers every Selectable under the level's scope, including those in its child groups, but not those
+        // under the scope below it, which the previous level already searched.
+        private static int Search(int level, NeighborSearch search, int count) {
             for (int i = 0; i < count; i++) {
-                var candidate = _candidates[i];
-                if (candidate == origin || !IsCandidate(candidate)) {
-                    continue;
-                }
-
-                var transform = candidate.transform;
-                if (scope != null && !transform.IsChildOf(scope.transform)) {
-                    continue;
-                }
-
-                if (excluded != null && transform.IsChildOf(excluded.transform)) {
+                if (_levels[i] != level) {
                     continue;
                 }
 
                 if (!_hasRect[i]) {
-                    _rects[i] = GetLocalRect(origin.transform, (RectTransform)transform);
+                    _rects[i] = GetLocalRect((RectTransform)_candidates[i].transform);
                     _hasRect[i] = true;
                 }
 
@@ -336,13 +363,14 @@ namespace Onion.UI.Navigation {
                 && selectable.transform is RectTransform;
         }
 
-        private static Rect GetLocalRect(Transform space, RectTransform rectTransform) {
+        // The rect in the origin's local space.
+        private static Rect GetLocalRect(RectTransform rectTransform) {
             rectTransform.GetWorldCorners(_corners);
 
-            Vector2 min = space.InverseTransformPoint(_corners[0]);
+            Vector2 min = _toOrigin.MultiplyPoint3x4(_corners[0]);
             Vector2 max = min;
             for (int i = 1; i < _corners.Length; i++) {
-                Vector2 point = space.InverseTransformPoint(_corners[i]);
+                Vector2 point = _toOrigin.MultiplyPoint3x4(_corners[i]);
                 min = Vector2.Min(min, point);
                 max = Vector2.Max(max, point);
             }

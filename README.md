@@ -21,7 +21,7 @@ Install via Unity Package Manager (UPM).
 
 `https://github.com/onion-unity/onion-ui-upgrader.git`
 
-Requires Unity 6000.0 or later and uGUI (`com.unity.ugui`) 2.0.0.
+Requires Unity 6000.0 or later and uGUI (`com.unity.ugui`) 2.0.0 or later.
 
 ### Setup
 
@@ -98,3 +98,7 @@ Nothing is recovered until something has been selected once. The selection itsel
 ## Turning it off
 
 Uncheck the box in the **Navigation** header in **Project Settings > Onion > UI Upgrader**. Every Selectable then uses Unity's default navigation. The assigned profile is kept, so upgrading again restores the same behavior.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
