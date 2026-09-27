@@ -46,11 +46,13 @@ The goal is to upgrade UGUI `Selectable` navigation without subclassing `Selecta
 - `selectOnEnable`: `OnEnable` sets `selectPending` (Play Mode only); the upgrader's next `Update` consumes all pending flags and selects the entry of the last-enabled group that has one, via `EventSystem.SetSelectedGameObject`, before reading the selection. Deferring avoids depending on enable order during scene loads (EventSystem or the default Selectable may not be enabled yet). Flags are consumed even while the upgrade is off, and then nothing is selected. With no entry, nothing is selected (no fallback to the first member).
 - Dropped on purpose, for now: anchor Selectables, group-to-group links, `restoreOnDisable`.
 
-## Deferred optimizations
+## Per-frame cost
 
-`NavigationUpgrader` recomputes all four neighbors every `Update` while something is selected. Each candidate's local rect is computed at most once per `Resolve` (lazily, in `Search`, cached in `_rects`/`_hasRect`, which `CollectCandidates` clears) and shared across the four directions and Pass Through levels, so that's at most n `GetLocalRect` calls per frame, each with 1 `GetWorldCorners` and 4 `InverseTransformPoint` native calls. Still not done, by the user's choice:
-- Transform corners with `origin.transform.worldToLocalMatrix` fetched once and `MultiplyPoint3x4`, instead of calling `InverseTransformPoint` per corner. This leaves about one native call (`GetWorldCorners`) per candidate.
-- Each direction and Pass Through level still repeats the candidate loop's `IsChildOf` checks.
+`NavigationUpgrader` recomputes all four neighbors every `Update` while something is selected, so work shared by the directions is done once per `Resolve`, in `CollectCandidates`:
+- The searchable scopes (`_scopes`: the origin's scope, then each parent reachable through Pass Through, null = root) and each candidate's level in them (`_levels`: the innermost scope it is under, or -1 when it is the origin, not a candidate, or outside every scope). A search at level k considers exactly the candidates at level k, which equals "under scope k but not under the Pass Through group being left". So `IsCandidate` and `IsChildOf` run once per candidate, not per direction and level.
+- `origin.transform.worldToLocalMatrix` (`_toOrigin`). Each candidate's local rect is computed at most once (lazily, in `Search`, cached in `_rects`/`_hasRect`) by transforming its world corners with `MultiplyPoint3x4`, so that's 1 native call (`GetWorldCorners`) per candidate.
+
+The visualizer's group boxes (`TryGetBox`, `DrawGroup`) likewise transform corners with a matrix fetched once per group.
 
 ## Known limitations
 
