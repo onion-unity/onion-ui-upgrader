@@ -28,6 +28,7 @@ namespace Onion.UI.Navigation {
         private UINavigation _originalNavigation;
         private UINavigation _appliedNavigation;
         private Selectable _selected;
+        private readonly SelectionRecovery _recovery = new();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Initialize() {
@@ -82,6 +83,10 @@ namespace Onion.UI.Navigation {
             }
         }
 
+        private void LateUpdate() {
+            _recovery.LateUpdate();
+        }
+
         private void OnDisable() {
             Release();
         }
@@ -130,7 +135,7 @@ namespace Onion.UI.Navigation {
         }
 
         // The last selection when remembered and still usable, else the default when usable, else null.
-        private static Selectable EntryOf(NavigationGroup group) {
+        internal static Selectable EntryOf(NavigationGroup group) {
             var last = group.lastSelected;
             if (group.rememberSelection && IsUsable(last) && last.transform.IsChildOf(group.transform)) {
                 return last;
@@ -139,7 +144,7 @@ namespace Onion.UI.Navigation {
             return IsUsable(group.defaultSelectable) ? group.defaultSelectable : null;
         }
 
-        private static bool IsUsable(Selectable selectable) {
+        internal static bool IsUsable(Selectable selectable) {
             return selectable != null && selectable.isActiveAndEnabled && IsCandidate(selectable);
         }
 

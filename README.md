@@ -83,6 +83,18 @@ When nested groups are entered at once, the outermost group is tried first. Wrap
 
 Groups only affect upgraded modes (Automatic / Horizontal / Vertical) and do nothing while the upgrade is off. Explicit slots can't target a group.
 
+## Selection Recovery
+
+With a keyboard or gamepad, uGUI stops responding once nothing is selected: after clicking empty space, or when the selected object is disabled or destroyed. While the Navigation upgrade is on, **Recover Selection** in the Navigation section fixes this. It is on by default; uncheck it to keep Unity's behavior.
+
+When the selection is lost, the next move selects a usable Selectable instead of moving. The first one found wins:
+
+1. The last selection, if it is still active and interactable.
+2. Each [Navigation Group](#navigation-group) the last selection was in that is still enabled, innermost first: its entry (last selection when remembered, otherwise Default Selectable), else its member nearest to where the last selection was.
+3. The Selectable nearest to where the last selection was.
+
+Nothing is recovered until something has been selected once. The selection itself is left alone until the move, so `EventSystem.currentSelectedGameObject` stays `null` while waiting. Move input is read from `StandaloneInputModule` or `InputSystemUIInputModule`; custom input modules are not supported.
+
 ## Turning it off
 
 Uncheck the box in the **Navigation** header in **Project Settings > Onion > UI Upgrader**. Every Selectable then uses Unity's default navigation. The assigned profile is kept, so upgrading again restores the same behavior.
