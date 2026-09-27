@@ -16,7 +16,7 @@ namespace Onion.UI.Navigation {
         // The dead zone input modules use to pick a move direction (BaseInputModule.DetermineMoveDirection).
         private const float MoveDeadZone = 0.6f;
 
-        private static Selectable[] _candidates = new Selectable[64];
+        private Selectable[] _candidates = new Selectable[64];
 
         private Selectable _last;
         private Vector3 _lastPosition;
@@ -159,7 +159,7 @@ namespace Onion.UI.Navigation {
             return nearest;
         }
 
-        private static int CollectCandidates() {
+        private int CollectCandidates() {
             int selectableCount = Selectable.allSelectableCount;
             if (_candidates.Length < selectableCount) {
                 _candidates = new Selectable[Mathf.NextPowerOfTwo(selectableCount)];
