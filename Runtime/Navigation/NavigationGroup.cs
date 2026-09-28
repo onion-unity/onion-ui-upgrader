@@ -88,6 +88,13 @@ namespace Onion.UI.Navigation {
         /// </summary>
         internal NavigationGroup parent => ScopeOf(transform.parent);
 
+        // Groups disabled while exiting Play Mode would otherwise stay queued into the next Play session
+        // when domain reload is off.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetPendingRestores() {
+            _pendingRestores.Clear();
+        }
+
         private void OnEnable() {
             _activeGroups.Add(this);
             // Reopened before the upgrader restored: nothing to restore.
