@@ -41,6 +41,7 @@ namespace Onion.UI.Navigation {
         private void Update() {
             // Taken even while off, so a group enabled then doesn't select later when the upgrade is turned on.
             var entry = TakePendingEntry();
+            var restore = TakePendingRestore();
 
             // Upgrade turned off (or no profile): leave every Selectable to Unity.
             var profile = NavigationSettings.profile;
@@ -52,6 +53,11 @@ namespace Onion.UI.Navigation {
             var eventSystem = EventSystem.current;
             if (entry != null && eventSystem != null) {
                 eventSystem.SetSelectedGameObject(entry.gameObject);
+            }
+
+            // After Select On Enable, so a group opened while another closed keeps the selection it took.
+            if (restore != null && eventSystem != null && restore.HoldsSelection()) {
+                eventSystem.SetSelectedGameObject(restore.restoreTarget.gameObject);
             }
 
             var selected = eventSystem != null ? eventSystem.currentSelectedGameObject : null;
@@ -132,6 +138,26 @@ namespace Onion.UI.Navigation {
             }
 
             return entry;
+        }
+
+        // The most recently disabled group waiting for Restore On Disable whose target is still usable, or null.
+        // Going back past unusable targets handles stacked popups closed together: when B (opened from a button
+        // in A) closes with A, B's target is inactive and A's wins. A destroyed group (scene unloaded or the
+        // object destroyed) compares as null by now and is skipped; so are unusable targets, which are left
+        // to Selection Recovery.
+        private static NavigationGroup TakePendingRestore() {
+            var pending = NavigationGroup.pendingRestores;
+            NavigationGroup restore = null;
+            for (int i = pending.Count - 1; i >= 0; i--) {
+                var group = pending[i];
+                if (group != null && IsUsable(group.restoreTarget)) {
+                    restore = group;
+                    break;
+                }
+            }
+
+            pending.Clear();
+            return restore;
         }
 
         // The last selection when remembered and still usable, else the default when usable, else null.

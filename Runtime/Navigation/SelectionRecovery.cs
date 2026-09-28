@@ -84,7 +84,7 @@ namespace Onion.UI.Navigation {
         }
 
         // Input modules don't send events to inactive objects or disabled components, so these can't move either.
-        private static bool IsLost(GameObject selected) {
+        internal static bool IsLost(GameObject selected) {
             if (selected == null || !selected.activeInHierarchy) {
                 return true;
             }
