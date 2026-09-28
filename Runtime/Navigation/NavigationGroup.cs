@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace Onion.UI.Navigation {
@@ -35,6 +36,7 @@ namespace Onion.UI.Navigation {
     [DisallowMultipleComponent]
     public sealed class NavigationGroup : MonoBehaviour {
         private static readonly List<NavigationGroup> _activeGroups = new();
+        private static readonly List<NavigationGroup> _pendingRestores = new();
 
         [Tooltip("Selected when navigation enters this group.\nWhen empty, the member picked by the move is selected.")]
         public Selectable defaultSelectable;
@@ -44,6 +46,9 @@ namespace Onion.UI.Navigation {
 
         [Tooltip("Selects the entry of this group (the last selection when remembered, otherwise Default Selectable) when the group is enabled in Play Mode.")]
         public bool selectOnEnable;
+
+        [Tooltip("When this group is disabled in Play Mode while the selection is in it, selects what was selected just before the group was enabled.\nUseful for popups opened over a menu.")]
+        public bool restoreOnDisable;
 
         [Tooltip("Contain = navigation stops at the group's edge.\nPass Through = when nothing is found inside, the search continues outside the group.")]
         public NavigationBoundary boundary = NavigationBoundary.Contain;
@@ -57,6 +62,12 @@ namespace Onion.UI.Navigation {
         internal static List<NavigationGroup> activeGroups => _activeGroups;
 
         /// <summary>
+        /// Groups disabled with <see cref="restoreOnDisable"/>, in disable order; consumed by the upgrader on its
+        /// next update.
+        /// </summary>
+        internal static List<NavigationGroup> pendingRestores => _pendingRestores;
+
+        /// <summary>
         /// The Selectable under this group that was selected last (recorded by the upgrader).
         /// </summary>
         internal Selectable lastSelected { get; set; }
@@ -67,17 +78,64 @@ namespace Onion.UI.Navigation {
         internal bool selectPending { get; set; }
 
         /// <summary>
+        /// The selection outside this group when it was last enabled in Play Mode, selected again by
+        /// <see cref="restoreOnDisable"/>.
+        /// </summary>
+        internal Selectable restoreTarget { get; private set; }
+
+        /// <summary>
         /// The group this one belongs to, or null when it is at the root.
         /// </summary>
         internal NavigationGroup parent => ScopeOf(transform.parent);
 
+        // Groups disabled while exiting Play Mode would otherwise stay queued into the next Play session
+        // when domain reload is off.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetPendingRestores() {
+            _pendingRestores.Clear();
+        }
+
         private void OnEnable() {
             _activeGroups.Add(this);
+            // Reopened before the upgrader restored: nothing to restore.
+            _pendingRestores.Remove(this);
             selectPending = selectOnEnable && Application.isPlaying;
+
+            // Select On Enable acts on the next update, so this is still what was selected before opening.
+            restoreTarget = null;
+            if (Application.isPlaying) {
+                var selected = CurrentSelection();
+                if (selected != null && selected.TryGetComponent(out Selectable selectable) && !IsUnder(selected)) {
+                    restoreTarget = selectable;
+                }
+            }
         }
 
         private void OnDisable() {
             _activeGroups.Remove(this);
+
+            // Whether the selection is in this group is checked on restore, not now: a stacked popup disabled
+            // later in the same frame may still hold it.
+            if (restoreOnDisable && Application.isPlaying && restoreTarget != null) {
+                _pendingRestores.Add(this);
+            }
+        }
+
+        /// <summary>
+        /// Whether the selection is under this group or lost, i.e. closing the group leaves nothing selected.
+        /// </summary>
+        internal bool HoldsSelection() {
+            var selected = CurrentSelection();
+            return SelectionRecovery.IsLost(selected) || IsUnder(selected);
+        }
+
+        private bool IsUnder(GameObject selected) {
+            return selected.transform.IsChildOf(transform);
+        }
+
+        private static GameObject CurrentSelection() {
+            var eventSystem = EventSystem.current;
+            return eventSystem != null ? eventSystem.currentSelectedGameObject : null;
         }
 
         /// <summary>
