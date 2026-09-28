@@ -62,8 +62,8 @@ namespace Onion.UI.Navigation {
         internal static List<NavigationGroup> activeGroups => _activeGroups;
 
         /// <summary>
-        /// Groups disabled with <see cref="restoreOnDisable"/> while the selection was in them, in disable order;
-        /// consumed by the upgrader on its next update.
+        /// Groups disabled with <see cref="restoreOnDisable"/>, in disable order; consumed by the upgrader on its
+        /// next update.
         /// </summary>
         internal static List<NavigationGroup> pendingRestores => _pendingRestores;
 
@@ -107,7 +107,9 @@ namespace Onion.UI.Navigation {
         private void OnDisable() {
             _activeGroups.Remove(this);
 
-            if (restoreOnDisable && Application.isPlaying && restoreTarget != null && HoldsSelection()) {
+            // Whether the selection is in this group is checked on restore, not now: a stacked popup disabled
+            // later in the same frame may still hold it.
+            if (restoreOnDisable && Application.isPlaying && restoreTarget != null) {
                 _pendingRestores.Add(this);
             }
         }
