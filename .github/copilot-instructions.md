@@ -40,4 +40,5 @@
 
 ## 기타
 
-- 공개 API나 동작이 바뀌면 `README.md` 갱신과 `package.json` `version` 올림이 필요한지 확인한다.
+- 공개 API나 동작이 바뀌면 `README.md` 갱신이 필요한지 확인한다.
+- `package.json`의 `version`은 릴리스 때 따로 올리므로, 버전을 올리라는 코멘트는 달지 않는다.
