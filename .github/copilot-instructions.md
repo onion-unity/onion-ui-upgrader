@@ -25,7 +25,7 @@
 - 이웃 점수 계산은 전부 `NeighborSearch`에 있다 (런타임과 Editor 프리뷰가 공유). 다른 곳에 점수 로직을 복제하지 않는다.
 - 점수 공식 `distance / cos(angle)^k`, `k = alignmentBias × 4`는 `alignmentBias 0.25`, `directionTolerance 90°`에서 Unity `Selectable.FindSelectable`과 정확히 같아야 한다 (wrap-around 포함). 이 동치를 깨는 변경은 지적한다.
 - 업그레이드는 기본 꺼짐(opt-in). on/off 판단은 `NavigationSettings.profile`(null이면 꺼짐) 하나로 한다. 내장 fallback 프로필은 의도적으로 없다.
-- Enter Play Mode에서 도메인 리로드가 꺼져 있어도 동작해야 한다. 리셋되지 않는 static 상태를 새로 추가하면 지적한다 (인스턴스 상태나 명시적 초기화 사용).
+- Enter Play Mode에서 도메인 리로드가 꺼져 있어도 동작해야 한다. 리셋되지 않는 static 상태는 영향이 클 때만 지적한다. 예를 들어 이전 Play 세션의 값이 다음 세션의 동작을 바꾸거나, 파괴된 객체 참조나 데이터가 세션을 넘어 남거나 쌓이는 경우다. 이때는 그 시나리오를 구체적으로 설명한다(해결책: 인스턴스 상태나 명시적 초기화). 매번 덮어쓰는 재사용 버퍼처럼, 값이 남아도 결과에 영향이 없는 static은 지적하지 않는다.
 - `NavigationGroup`은 `[ExecuteAlways]`로 Edit Mode에서도 등록된다. Play Mode 전용 동작은 `Application.isPlaying`으로 막아야 한다.
 
 ## 성능
@@ -40,4 +40,5 @@
 
 ## 기타
 
-- 공개 API나 동작이 바뀌면 `README.md` 갱신과 `package.json` `version` 올림이 필요한지 확인한다.
+- 공개 API나 동작이 바뀌면 `README.md` 갱신이 필요한지 확인한다.
+- `package.json`의 `version`은 릴리스 때 따로 올리므로, 버전을 올리라는 코멘트는 달지 않는다.
