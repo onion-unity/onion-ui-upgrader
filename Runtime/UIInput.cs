@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.EventSystems;
 #if ONION_INPUTSYSTEM
@@ -12,6 +14,13 @@ namespace Onion.UI {
     internal static class UIInput {
         // The dead zone StandaloneInputModule uses to pick a move direction (BaseInputModule.DetermineMoveDirection).
         private const float MoveDeadZone = 0.6f;
+
+        // PointerInputModule.kMouseLeftId, which is protected.
+        private const int MousePointerId = -1;
+
+        // StandaloneInputModule's pointer data, holding each pointer's raycast of this frame. Null if a future uGUI
+        // renames it; the hover is then raycast separately.
+        private static readonly FieldInfo PointerDataField = typeof(PointerInputModule).GetField("m_PointerData", BindingFlags.NonPublic | BindingFlags.Instance);
 
         /// <summary>
         /// Whether the move input is past the module's threshold, i.e. the module sends Move while it is held.
@@ -150,6 +159,53 @@ namespace Onion.UI {
 #if ONION_INPUTSYSTEM
                 case InputSystemUIInputModule inputSystem:
                     return WasPressed(inputSystem.leftClick) || WasPressed(inputSystem.rightClick) || WasPressed(inputSystem.middleClick);
+#endif
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// The topmost object hit by the module's own raycast for the pointer of <see cref="TryGetPointerPosition"/>
+        /// this frame (null when nothing is hit). The module raycasts in EventSystem.Update, so read it after that.
+        /// False when the module's result can't be read and the caller has to raycast itself.
+        /// </summary>
+        internal static bool TryGetPointerHit(EventSystem eventSystem, out GameObject hit) {
+            hit = null;
+            switch (eventSystem.currentInputModule) {
+                case StandaloneInputModule standalone:
+                    // Only kept in a protected field (GetLastPointerEventData is protected too).
+                    if (PointerDataField?.GetValue(standalone) is not Dictionary<int, PointerEventData> pointers) {
+                        return false;
+                    }
+
+                    // A touch while touching, else the mouse, like the module (touch takes precedence).
+                    int id = MousePointerId;
+                    var input = standalone.input;
+                    for (int i = 0; i < input.touchCount; i++) {
+                        var touch = input.GetTouch(i);
+                        if (touch.type != TouchType.Indirect) {
+                            id = touch.fingerId;
+                            break;
+                        }
+                    }
+
+                    if (pointers.TryGetValue(id, out var data)) {
+                        hit = data.pointerCurrentRaycast.gameObject;
+                    }
+
+                    return true;
+#if ONION_INPUTSYSTEM
+                case InputSystemUIInputModule inputSystem:
+                    // The device driving the point action; its deviceId also finds a touch on a touchscreen.
+                    var reference = inputSystem.point;
+                    var device = reference != null && reference.action != null ? reference.action.activeControl?.device : null;
+                    device ??= UnityEngine.InputSystem.Pointer.current;
+                    if (device != null) {
+                        hit = inputSystem.GetLastRaycastResult(device.deviceId).gameObject;
+                    }
+
+                    return true;
 #endif
                 default:
                     return false;

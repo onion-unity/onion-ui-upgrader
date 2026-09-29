@@ -115,6 +115,17 @@ namespace Onion.UI.Focus {
                 return null;
             }
 
+            // The input module already raycast the pointer in this frame's EventSystem.Update.
+            if (!UIInput.TryGetPointerHit(eventSystem, out var hit)) {
+                hit = Raycast(eventSystem, position);
+            }
+
+            var hovered = hit != null ? hit.GetComponentInParent<Selectable>() : null;
+            return NavigationUpgrader.IsUsable(hovered) ? hovered : null;
+        }
+
+        // The topmost hit at the position, for when the module's own result can't be read.
+        private GameObject Raycast(EventSystem eventSystem, Vector2 position) {
             if (_pointerEventSystem != eventSystem) {
                 _pointerEventSystem = eventSystem;
                 _pointerData = new PointerEventData(eventSystem);
@@ -123,15 +134,13 @@ namespace Onion.UI.Focus {
             _pointerData.position = position;
             eventSystem.RaycastAll(_pointerData, _raycasts);
 
-            Selectable hovered = null;
             foreach (var result in _raycasts) {
                 if (result.gameObject != null) {
-                    hovered = result.gameObject.GetComponentInParent<Selectable>();
-                    break;
+                    return result.gameObject;
                 }
             }
 
-            return NavigationUpgrader.IsUsable(hovered) ? hovered : null;
+            return null;
         }
     }
 }
