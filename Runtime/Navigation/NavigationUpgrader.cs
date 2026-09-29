@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Onion.UI.Focus;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -29,6 +30,7 @@ namespace Onion.UI.Navigation {
         private UINavigation _appliedNavigation;
         private Selectable _selected;
         private readonly SelectionRecovery _recovery = new();
+        private readonly InputModeTracker _focus = new();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Initialize() {
@@ -43,27 +45,28 @@ namespace Onion.UI.Navigation {
             var entry = TakePendingEntry();
             var restore = TakePendingRestore();
 
-            // Upgrade turned off (or no profile): leave every Selectable to Unity.
+            // Null while the upgrade is off (or has no profile): Selectables are then left to Unity,
+            // except for a move the focus tracker holds back.
             var profile = NavigationSettings.profile;
-            if (profile == null) {
-                Release();
-                return;
-            }
-
             var eventSystem = EventSystem.current;
-            if (entry != null && eventSystem != null) {
-                eventSystem.SetSelectedGameObject(entry.gameObject);
+            if (profile != null && eventSystem != null) {
+                if (entry != null) {
+                    eventSystem.SetSelectedGameObject(entry.gameObject);
+                }
+
+                // After Select On Enable, so a group opened while another closed keeps the selection it took.
+                if (restore != null && restore.HoldsSelection()) {
+                    eventSystem.SetSelectedGameObject(restore.restoreTarget.gameObject);
+                }
             }
 
-            // After Select On Enable, so a group opened while another closed keeps the selection it took.
-            if (restore != null && eventSystem != null && restore.HoldsSelection()) {
-                eventSystem.SetSelectedGameObject(restore.restoreTarget.gameObject);
-            }
+            // May move the selection to the hovered Selectable, so before the selection is read.
+            bool holdMove = _focus.Update(eventSystem);
 
             var selected = eventSystem != null ? eventSystem.currentSelectedGameObject : null;
             var selectable = selected != null ? selected.GetComponent<Selectable>() : null;
 
-            if (selectable != _selected) {
+            if (profile != null && selectable != _selected) {
                 _selected = selectable;
                 RememberSelection(selectable);
             }
@@ -71,26 +74,35 @@ namespace Onion.UI.Navigation {
             if (selectable != _target) {
                 Release();
 
-                if (selectable != null && IsUpgradable(selectable)) {
+                if (selectable != null && (holdMove || (profile != null && IsUpgradable(selectable, selectable.navigation.mode)))) {
                     _target = selectable;
                     _originalNavigation = selectable.navigation;
                 }
             } else if (_target != null && IsChangedExternally()) {
                 // A script set the navigation while selected: that becomes the original to restore.
                 _originalNavigation = _target.navigation;
-                if (!IsUpgradable(_target)) {
-                    _target = null;
-                }
             }
 
-            if (_target != null) {
-                _appliedNavigation = Resolve(_target, _originalNavigation, profile);
-                _target.navigation = _appliedNavigation;
+            if (_target == null) {
+                return;
             }
+
+            if (holdMove) {
+                _appliedNavigation = Hold(_target, _originalNavigation);
+            } else if (profile != null && IsUpgradable(_target, _originalNavigation.mode)) {
+                _appliedNavigation = Resolve(_target, _originalNavigation, profile);
+            } else {
+                Release();
+                return;
+            }
+
+            _target.navigation = _appliedNavigation;
         }
 
         private void LateUpdate() {
             _recovery.LateUpdate();
+            // After recovery, so a recovered selection is focused this frame.
+            _focus.LateUpdate(EventSystem.current);
         }
 
         private void OnDisable() {
@@ -193,7 +205,7 @@ namespace Onion.UI.Navigation {
 
             navigation = selectable.navigation;
             var profile = NavigationSettings.profile;
-            if (profile == null || !IsUpgradable(selectable)) {
+            if (profile == null || !IsUpgradable(selectable, navigation.mode)) {
                 return false;
             }
 
@@ -201,8 +213,8 @@ namespace Onion.UI.Navigation {
             return true;
         }
 
-        private static bool IsUpgradable(Selectable selectable) {
-            var mode = selectable.navigation.mode;
+        // Takes the mode separately, since the tracked Selectable's navigation holds what was applied.
+        private static bool IsUpgradable(Selectable selectable, UINavigation.Mode mode) {
             bool isAutomatic = mode == UINavigation.Mode.Automatic
                 || mode == UINavigation.Mode.Horizontal
                 || mode == UINavigation.Mode.Vertical;
@@ -234,6 +246,19 @@ namespace Onion.UI.Navigation {
                 navigation.selectOnDown = FindNeighbor(origin, from, Vector2.down, wrap, profile, count, entered, 3);
             }
 
+            return navigation;
+        }
+
+        // Every direction points back at the Selectable itself: the move is consumed without moving or changing
+        // a Slider/Scrollbar value (they only do that when FindSelectableOnX() returns null), and the input
+        // module still starts its repeat delay, so a held move goes on after it.
+        private static UINavigation Hold(Selectable selectable, UINavigation original) {
+            var navigation = original;
+            navigation.mode = UINavigation.Mode.Explicit;
+            navigation.selectOnLeft = selectable;
+            navigation.selectOnRight = selectable;
+            navigation.selectOnUp = selectable;
+            navigation.selectOnDown = selectable;
             return navigation;
         }
 

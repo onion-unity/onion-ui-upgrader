@@ -2,9 +2,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-#if ONION_INPUTSYSTEM
-using UnityEngine.InputSystem.UI;
-#endif
 
 namespace Onion.UI.Navigation {
     /// <summary>
@@ -13,9 +10,6 @@ namespace Onion.UI.Navigation {
     /// Owned and driven by <see cref="NavigationUpgrader"/>.
     /// </summary>
     internal sealed class SelectionRecovery {
-        // The dead zone StandaloneInputModule uses to pick a move direction (BaseInputModule.DetermineMoveDirection).
-        private const float MoveDeadZone = 0.6f;
-
         private Selectable[] _candidates = new Selectable[64];
 
         private Selectable _last;
@@ -29,7 +23,7 @@ namespace Onion.UI.Navigation {
         // so the move that recovers doesn't also move away from the recovered Selectable.
         internal void LateUpdate() {
             var eventSystem = EventSystem.current;
-            bool moving = eventSystem != null && IsMoving(eventSystem);
+            bool moving = eventSystem != null && UIInput.IsMoving(eventSystem);
             bool moveStarted = moving && !_wasMoving;
             _wasMoving = moving;
 
@@ -54,32 +48,6 @@ namespace Onion.UI.Navigation {
             var target = FindTarget();
             if (target != null) {
                 eventSystem.SetSelectedGameObject(target.gameObject);
-            }
-        }
-
-        // Whether the current input module's move input is past the dead zone.
-        private static bool IsMoving(EventSystem eventSystem) {
-            if (!eventSystem.sendNavigationEvents) {
-                return false;
-            }
-
-            switch (eventSystem.currentInputModule) {
-                case StandaloneInputModule standalone:
-                    var input = standalone.input;
-                    var move = new Vector2(input.GetAxisRaw(standalone.horizontalAxis), input.GetAxisRaw(standalone.verticalAxis));
-                    return move.sqrMagnitude >= MoveDeadZone * MoveDeadZone;
-#if ONION_INPUTSYSTEM
-                case InputSystemUIInputModule inputSystem:
-                    var reference = inputSystem.move;
-                    if (reference == null || reference.action == null) {
-                        return false;
-                    }
-
-                    // No dead zone of its own: any nonzero move is sent (the action's processors apply one).
-                    return reference.action.ReadValue<Vector2>().sqrMagnitude > 0f;
-#endif
-                default:
-                    return false;
             }
         }
 

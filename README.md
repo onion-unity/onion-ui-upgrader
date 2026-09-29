@@ -96,9 +96,28 @@ When the selection is lost, the next move selects a usable Selectable instead of
 
 Nothing is recovered until something has been selected once. The selection itself is left alone until the move, so `EventSystem.currentSelectedGameObject` stays `null` while waiting. Move input is read from `StandaloneInputModule` or `InputSystemUIInputModule`; custom input modules are not supported.
 
+## Focus
+
+uGUI handles hover and selection separately. After selecting A with the keyboard, hovering B highlights both, and a clicked button stays selected after the mouse leaves. The **Focus** section tracks which input the UI is being used with and settles on one focused Selectable. Hovering never changes the EventSystem's selection, so selection sounds, scrolling to the selection, and other selection-driven behavior don't react to hover. Check the box in the **Focus** header to turn it on. It is off by default.
+
+| Input mode | Switched by | Focused |
+| --- | --- | --- |
+| **Navigation** (initial) | Move or Submit (and optionally Cancel) | The selection |
+| **Pointer** | Moving the pointer, pressing a pointer button, or a touch | The hovered Selectable, when clicking it would select it. Otherwise nothing. |
+
+A layout moving under a still cursor or the scroll wheel doesn't switch to Pointer mode. Clicking still selects as usual, so input fields, Cancel, and Navigation Group features keep working in Pointer mode.
+
+| Setting | Description |
+| --- | --- |
+| **Continue From Hover** | When switching to Navigation, the hovered Selectable becomes the selection before the input is handled, so the move or submit starts from what was highlighted. Off: it starts from the existing selection, like Unity. |
+| **Reveal On First Input** | When switching to Navigation and the selection wasn't highlighted, the first move or submit only shows the selection. A held move goes on after the usual repeat delay. When nothing is selected, Selection Recovery handles the first move instead. |
+| **Cancel Switches Mode** | Cancel also switches to Navigation. Off by default, so closing a popup with Esc doesn't bring up a highlight for mouse users. |
+
+Scripts read the result from `Onion.UI.Focus.UIFocus`: `mode`, `focused`, and the `modeChanged` / `focusChanged` events, updated once per frame in LateUpdate. While the Focus upgrade is off, `mode` is always `Navigation` and `focused` is the selection. The Focus section only decides what is focused. Highlighting it is up to your code for now. Input is read from `StandaloneInputModule` or `InputSystemUIInputModule`; custom input modules are not supported.
+
 ## Turning it off
 
-Uncheck the box in the **Navigation** header in **Project Settings > Onion > UI Upgrader**. Every Selectable then uses Unity's default navigation. The assigned profile is kept, so upgrading again restores the same behavior.
+Uncheck the box in the **Navigation** header in **Project Settings > Onion > UI Upgrader**. Every Selectable then uses Unity's default navigation. The assigned profile is kept, so upgrading again restores the same behavior. Unchecking the **Focus** header likewise returns to Unity's hover and selection behavior.
 
 ## License
 
