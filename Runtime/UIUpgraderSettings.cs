@@ -1,3 +1,4 @@
+using Onion.UI.Focus;
 using Onion.UI.Navigation;
 using UnityEngine;
 
@@ -17,6 +18,9 @@ namespace Onion.UI {
 
         [SerializeField]
         internal NavigationSettings navigation = new NavigationSettings();
+
+        [SerializeField]
+        internal FocusSettings focus = new FocusSettings();
 
         internal static UIUpgraderSettings instance {
             get {

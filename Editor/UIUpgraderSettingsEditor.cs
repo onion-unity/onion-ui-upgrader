@@ -15,9 +15,11 @@ namespace Onion.UI.Editor {
         private static GUIStyle _badgeStyle;
 
         private SerializedProperty _navigation;
+        private SerializedProperty _focus;
 
         private void OnEnable() {
             _navigation = serializedObject.FindProperty(nameof(UIUpgraderSettings.navigation));
+            _focus = serializedObject.FindProperty(nameof(UIUpgraderSettings.focus));
         }
 
         public override void OnInspectorGUI() {
@@ -37,6 +39,7 @@ namespace Onion.UI.Editor {
             serializedObject.Update();
 
             DrawSection(_navigation, "Navigation", NavigationSettingsDrawer.Draw);
+            DrawSection(_focus, "Focus", FocusSettingsDrawer.Draw);
             DrawSplitter();
 
             serializedObject.ApplyModifiedProperties();
