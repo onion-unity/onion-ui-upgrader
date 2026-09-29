@@ -28,6 +28,8 @@ namespace Onion.UI.Navigation {
         private Selectable _target;
         private UINavigation _originalNavigation;
         private UINavigation _appliedNavigation;
+        // Whether _appliedNavigation is a Hold, which must be replaced on the next frame even without a move.
+        private bool _held;
         private Selectable _selected;
         private readonly SelectionRecovery _recovery = new();
         private readonly InputModeTracker _focus = new();
@@ -71,16 +73,20 @@ namespace Onion.UI.Navigation {
                 RememberSelection(selectable);
             }
 
+            // Whether what was applied no longer fits the Selectable, so it is resolved even without a move.
+            bool stale = false;
             if (selectable != _target) {
                 Release();
 
                 if (selectable != null && (holdMove || (profile != null && IsUpgradable(selectable, selectable.navigation.mode)))) {
                     _target = selectable;
                     _originalNavigation = selectable.navigation;
+                    stale = true;
                 }
             } else if (_target != null && IsChangedExternally()) {
                 // A script set the navigation while selected: that becomes the original to restore.
                 _originalNavigation = _target.navigation;
+                stale = true;
             }
 
             if (_target == null) {
@@ -89,8 +95,17 @@ namespace Onion.UI.Navigation {
 
             if (holdMove) {
                 _appliedNavigation = Hold(_target, _originalNavigation);
+                _held = true;
             } else if (profile != null && IsUpgradable(_target, _originalNavigation.mode)) {
+                // Neighbors are only used by a move, so without one the applied navigation is kept as is. A hold is
+                // replaced anyway, or a script's FindSelectableOnX() would keep returning the Selectable itself.
+                // Moves can't be read from custom input modules, so there it is resolved every frame.
+                if (!stale && !_held && !UIInput.IsMoving(eventSystem) && UIInput.CanReadMove(eventSystem)) {
+                    return;
+                }
+
                 _appliedNavigation = Resolve(_target, _originalNavigation, profile);
+                _held = false;
             } else {
                 Release();
                 return;
@@ -116,6 +131,7 @@ namespace Onion.UI.Navigation {
             }
 
             _target = null;
+            _held = false;
         }
 
         // Navigation.Equals ignores wrapAround, but so does the navigation setter, so it can't change on its own.

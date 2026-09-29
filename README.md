@@ -35,7 +35,7 @@ On first load, the package creates `Assets/Settings/Onion_UIUpgraderSettings`, t
 
 ## How it works
 
-At runtime, the currently selected Selectable gets its neighbors computed every frame. The result is written as Explicit navigation, and Unity performs the actual move as usual. When the selection moves away, the original navigation is restored. Scene data is never changed, and at most one Selectable is modified at a time.
+At runtime, the currently selected Selectable gets its neighbors computed when it is selected and while move input is held, so nothing is computed while the UI sits idle (with a custom input module, whose move input can't be read, it is computed every frame). The result is written as Explicit navigation, and Unity performs the actual move as usual. When the selection moves away, the original navigation is restored. Scene data is never changed, and at most one Selectable is modified at a time.
 
 Which Selectables are affected depends on their own **Navigation** mode, so the Inspector setting you already know works as the switch:
 

@@ -41,6 +41,21 @@ namespace Onion.UI {
             }
         }
 
+        /// <summary>
+        /// Whether <see cref="IsMoving"/> reflects the moves the current input module sends. False for custom modules.
+        /// </summary>
+        internal static bool CanReadMove(EventSystem eventSystem) {
+            return eventSystem.currentInputModule switch {
+                // No module sends no moves, which IsMoving reports correctly.
+                null => true,
+                StandaloneInputModule => true,
+#if ONION_INPUTSYSTEM
+                InputSystemUIInputModule => true,
+#endif
+                _ => false,
+            };
+        }
+
         internal static bool WasSubmitPressed(EventSystem eventSystem) {
             if (!eventSystem.sendNavigationEvents) {
                 return false;
