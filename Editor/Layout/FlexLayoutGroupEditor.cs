@@ -16,6 +16,8 @@ namespace Onion.UI.Editor {
         private const string UndoName = "Convert to Flex Layout Group";
 
         private SerializedProperty _direction;
+        private SerializedProperty _wrap;
+        private SerializedProperty _lineSpacing;
         private SerializedProperty _padding;
         private SerializedProperty _spacing;
         private SerializedProperty _childAlignment;
@@ -30,6 +32,8 @@ namespace Onion.UI.Editor {
 
         private void OnEnable() {
             _direction = serializedObject.FindProperty("_direction");
+            _wrap = serializedObject.FindProperty("_wrap");
+            _lineSpacing = serializedObject.FindProperty("_lineSpacing");
             _padding = serializedObject.FindProperty("m_Padding");
             _spacing = serializedObject.FindProperty("_spacing");
             _childAlignment = serializedObject.FindProperty("m_ChildAlignment");
@@ -46,8 +50,11 @@ namespace Onion.UI.Editor {
         public override void OnInspectorGUI() {
             serializedObject.Update();
             EditorGUILayout.PropertyField(_direction);
+            EditorGUILayout.PropertyField(_wrap);
             EditorGUILayout.PropertyField(_padding, true);
             EditorGUILayout.PropertyField(_spacing);
+            if (_wrap.boolValue || _wrap.hasMultipleDifferentValues)
+                EditorGUILayout.PropertyField(_lineSpacing);
             EditorGUILayout.PropertyField(_childAlignment);
             EditorGUILayout.PropertyField(_justify);
             EditorGUILayout.PropertyField(_reverseArrangement);
