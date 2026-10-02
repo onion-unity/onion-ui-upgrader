@@ -33,7 +33,16 @@ namespace Onion.UI.Layout {
     [ExecuteAlways]
     public class FlexLayoutGroup : LayoutGroup {
         [SerializeField] private FlexDirection _direction = FlexDirection.Horizontal;
+
+        [SerializeField]
+        [Tooltip("Moves children that don't fit along Direction to a new line. Each line is laid out on its own, and the lines are placed across Direction by Child Alignment.\nVertical: the preferred width follows the height of the last layout pass, so it lags when the height is driven by a layout.")]
+        private bool _wrap = false;
+
         [SerializeField] private float _spacing = 0;
+
+        [SerializeField]
+        [Tooltip("Space between lines when Wrap is on.")]
+        private float _lineSpacing = 0;
 
         [SerializeField]
         [Tooltip("How the leftover space along Direction is distributed between the children.\nWhen set to anything else, Child Force Expand along Direction is ignored, and Child Alignment only applies across Direction (except to a single child under Space Between). Has no effect when a child is flexible, since it takes the leftover.")]
@@ -49,7 +58,9 @@ namespace Onion.UI.Layout {
         [SerializeField] private bool _childForceExpandHeight = false;
 
         public FlexDirection direction { get => _direction; set => SetProperty(ref _direction, value); }
+        public bool wrap { get => _wrap; set => SetProperty(ref _wrap, value); }
         public float spacing { get => _spacing; set => SetProperty(ref _spacing, value); }
+        public float lineSpacing { get => _lineSpacing; set => SetProperty(ref _lineSpacing, value); }
         public Justify justify { get => _justify; set => SetProperty(ref _justify, value); }
         public bool reverseArrangement { get => _reverseArrangement; set => SetProperty(ref _reverseArrangement, value); }
         public bool childControlWidth { get => _childControlWidth; set => SetProperty(ref _childControlWidth, value); }
@@ -59,14 +70,19 @@ namespace Onion.UI.Layout {
         public bool childForceExpandWidth { get => _childForceExpandWidth; set => SetProperty(ref _childForceExpandWidth, value); }
         public bool childForceExpandHeight { get => _childForceExpandHeight; set => SetProperty(ref _childForceExpandHeight, value); }
 
+        // Laid out children in arrangement order, and where each line ends (exclusive) in it.
+        private readonly System.Collections.Generic.List<RectTransform> _order = new();
+        private readonly System.Collections.Generic.List<int> _lineEnds = new();
+
         private bool isVertical => _direction == FlexDirection.Vertical;
+        private int mainAxis => isVertical ? 1 : 0;
 
         /// <summary>
         /// Child Force Expand for <paramref name="axis"/>. Ignored along Direction while <see cref="justify"/> is set,
         /// since expanded children would take the leftover space Justify distributes.
         /// </summary>
         private bool ForceExpands(int axis) {
-            if (_justify != Justify.ChildAlignment && axis == (isVertical ? 1 : 0)) return false;
+            if (_justify != Justify.ChildAlignment && axis == mainAxis) return false;
             return axis == 0 ? _childForceExpandWidth : _childForceExpandHeight;
         }
 
@@ -85,11 +101,20 @@ namespace Onion.UI.Layout {
 
         public override void SetLayoutVertical() {
             SetChildrenAlongAxis(1);
+            // Vertical wrap: the lines placed horizontally before were broken by the previous height.
+            if (_wrap && isVertical)
+                SetChildrenAlongAxis(0);
         }
 
         // The rest of this class follows HorizontalOrVerticalLayoutGroup, so the same settings give the same layout.
+        // Wrap only adds separate paths (see "Wrap" below).
 
         private void CalcAlongAxis(int axis) {
+            if (_wrap && axis != mainAxis) {
+                CalcAcrossLines(axis);
+                return;
+            }
+
             float combinedPadding = axis == 0 ? padding.horizontal : padding.vertical;
             bool controlSize = axis == 0 ? _childControlWidth : _childControlHeight;
             bool useScale = axis == 0 ? _childScaleWidth : _childScaleHeight;
@@ -98,6 +123,7 @@ namespace Onion.UI.Layout {
             float totalMin = combinedPadding;
             float totalPreferred = combinedPadding;
             float totalFlexible = 0;
+            float largestMin = 0;
 
             bool alongOtherAxis = isVertical ^ (axis == 1);
             for (int i = 0; i < rectChildren.Count; i++) {
@@ -119,6 +145,7 @@ namespace Onion.UI.Layout {
                     totalMin += min + _spacing;
                     totalPreferred += preferred + _spacing;
                     totalFlexible += flexible;
+                    largestMin = Mathf.Max(largestMin, min);
                 }
             }
 
@@ -126,11 +153,30 @@ namespace Onion.UI.Layout {
                 totalMin -= _spacing;
                 totalPreferred -= _spacing;
             }
+            // Wrapped, a line can be as short as its largest child; the preferred size stays one line.
+            if (_wrap && !alongOtherAxis)
+                totalMin = combinedPadding + largestMin;
             totalPreferred = Mathf.Max(totalMin, totalPreferred);
             SetLayoutInputForAxis(totalMin, totalPreferred, totalFlexible, axis);
         }
 
         private void SetChildrenAlongAxis(int axis) {
+            if (_wrap) {
+                FillOrder();
+                Read(_mainSizes, mainAxis);
+                BreakLines();
+                if (axis == mainAxis) {
+                    for (int line = 0, from = 0; line < _lineEnds.Count; from = _lineEnds[line++]) {
+                        GetLineTotals(from, _lineEnds[line], out float lineMin, out float linePreferred, out float lineFlexible);
+                        PlaceAlong(axis, from, _lineEnds[line], lineMin, linePreferred, lineFlexible);
+                    }
+                } else {
+                    Read(_crossSizes, axis);
+                    PlaceAcrossLines(axis);
+                }
+                return;
+            }
+
             float size = rectTransform.rect.size[axis];
             bool controlSize = axis == 0 ? _childControlWidth : _childControlHeight;
             bool useScale = axis == 0 ? _childScaleWidth : _childScaleHeight;
@@ -157,39 +203,208 @@ namespace Onion.UI.Layout {
                     }
                 }
             } else {
-                float pos = axis == 0 ? padding.left : padding.top;
-                float gap = _spacing;
-                float itemFlexibleMultiplier = 0;
-                float surplusSpace = size - GetTotalPreferredSize(axis);
+                FillOrder();
+                Read(_mainSizes, axis);
+                PlaceAlong(axis, 0, count, GetTotalMinSize(axis), GetTotalPreferredSize(axis), GetTotalFlexibleSize(axis));
+            }
+        }
 
-                if (surplusSpace > 0) {
-                    if (GetTotalFlexibleSize(axis) == 0) {
-                        if (!TryJustify(surplusSpace, count, ref pos, ref gap))
-                            pos = GetStartOffset(axis, GetTotalPreferredSize(axis) - (axis == 0 ? padding.horizontal : padding.vertical));
-                    } else if (GetTotalFlexibleSize(axis) > 0) {
-                        itemFlexibleMultiplier = surplusSpace / GetTotalFlexibleSize(axis);
-                    }
+        // Places _order[from..to) along the main axis (sizes from _mainSizes), given their totals
+        // (padding included, like the group's own).
+        private void PlaceAlong(int axis, int from, int to, float totalMin, float totalPreferred, float totalFlexible) {
+            float size = rectTransform.rect.size[axis];
+            bool controlSize = axis == 0 ? _childControlWidth : _childControlHeight;
+            float alignmentOnAxis = GetAlignmentOnAxis(axis);
+            ChildSizes sizes = _mainSizes;
+
+            float pos = axis == 0 ? padding.left : padding.top;
+            float gap = _spacing;
+            float itemFlexibleMultiplier = 0;
+            float surplusSpace = size - totalPreferred;
+
+            if (surplusSpace > 0) {
+                if (totalFlexible == 0) {
+                    if (!TryJustify(surplusSpace, to - from, ref pos, ref gap))
+                        pos = GetStartOffset(axis, totalPreferred - (axis == 0 ? padding.horizontal : padding.vertical));
+                } else if (totalFlexible > 0) {
+                    itemFlexibleMultiplier = surplusSpace / totalFlexible;
                 }
+            }
 
-                float minMaxLerp = 0;
-                if (GetTotalMinSize(axis) != GetTotalPreferredSize(axis))
-                    minMaxLerp = Mathf.Clamp01((size - GetTotalMinSize(axis)) / (GetTotalPreferredSize(axis) - GetTotalMinSize(axis)));
+            float minMaxLerp = 0;
+            if (totalMin != totalPreferred)
+                minMaxLerp = Mathf.Clamp01((size - totalMin) / (totalPreferred - totalMin));
 
+            for (int k = from; k < to; k++) {
+                RectTransform child = _order[k];
+                float scaleFactor = sizes.scale[k];
+
+                float childSize = Mathf.Lerp(sizes.min[k], sizes.preferred[k], minMaxLerp);
+                childSize += sizes.flexible[k] * itemFlexibleMultiplier;
+                if (controlSize) {
+                    SetChildAlongAxisWithScale(child, axis, pos, childSize, scaleFactor);
+                } else {
+                    float offsetInCell = (childSize - child.sizeDelta[axis]) * alignmentOnAxis;
+                    SetChildAlongAxisWithScale(child, axis, pos + offsetInCell, scaleFactor);
+                }
+                pos += childSize * scaleFactor + gap;
+            }
+        }
+
+        private void FillOrder() {
+            _order.Clear();
+            int count = rectChildren.Count;
+            for (int k = 0; k < count; k++)
+                _order.Add(rectChildren[_reverseArrangement ? count - 1 - k : k]);
+        }
+
+        // Child sizes along one axis, in _order. Read once per pass, so line breaking, line sizes and placement
+        // don't query LayoutUtility (a component search per call) for the same child again.
+        private sealed class ChildSizes {
+            public float[] min = new float[0], preferred = new float[0], flexible = new float[0], scale = new float[0];
+
+            public void Fill(System.Collections.Generic.List<RectTransform> order, int axis, bool controlSize, bool forceExpand, bool useScale) {
+                int count = order.Count;
+                if (min.Length < count) {
+                    int capacity = Mathf.Max(count, min.Length * 2);
+                    min = new float[capacity];
+                    preferred = new float[capacity];
+                    flexible = new float[capacity];
+                    scale = new float[capacity];
+                }
                 for (int k = 0; k < count; k++) {
-                    RectTransform child = rectChildren[_reverseArrangement ? count - 1 - k : k];
-                    GetChildSizes(child, axis, controlSize, childForceExpandSize, out float min, out float preferred, out float flexible);
-                    float scaleFactor = useScale ? child.localScale[axis] : 1f;
-
-                    float childSize = Mathf.Lerp(min, preferred, minMaxLerp);
-                    childSize += flexible * itemFlexibleMultiplier;
-                    if (controlSize) {
-                        SetChildAlongAxisWithScale(child, axis, pos, childSize, scaleFactor);
-                    } else {
-                        float offsetInCell = (childSize - child.sizeDelta[axis]) * alignmentOnAxis;
-                        SetChildAlongAxisWithScale(child, axis, pos + offsetInCell, scaleFactor);
-                    }
-                    pos += childSize * scaleFactor + gap;
+                    GetChildSizes(order[k], axis, controlSize, forceExpand, out min[k], out preferred[k], out flexible[k]);
+                    scale[k] = useScale ? order[k].localScale[axis] : 1f;
                 }
+            }
+        }
+
+        private readonly ChildSizes _mainSizes = new(), _crossSizes = new();
+
+        private void Read(ChildSizes sizes, int axis) {
+            sizes.Fill(_order, axis, axis == 0 ? _childControlWidth : _childControlHeight, ForceExpands(axis),
+                axis == 0 ? _childScaleWidth : _childScaleHeight);
+        }
+
+        // ---- Wrap ----
+
+        // Breaks _order into lines (sizes from _mainSizes): a child starts a new line when its preferred size
+        // (with scale) doesn't fit after the line so far. A line always holds at least one child.
+        private void BreakLines() {
+            _lineEnds.Clear();
+            int axis = mainAxis;
+            float innerSize = rectTransform.rect.size[axis] - (axis == 0 ? padding.horizontal : padding.vertical);
+
+            float lineSize = 0;
+            for (int k = 0; k < _order.Count; k++) {
+                float preferred = _mainSizes.preferred[k] * _mainSizes.scale[k];
+
+                // Small tolerance, so children that fit exactly don't wrap from rounding.
+                if (k > 0 && lineSize + _spacing + preferred > innerSize + 0.001f) {
+                    _lineEnds.Add(k);
+                    lineSize = preferred;
+                } else {
+                    lineSize += (k > 0 ? _spacing : 0) + preferred;
+                }
+            }
+            if (_order.Count > 0)
+                _lineEnds.Add(_order.Count);
+        }
+
+        // Same sums as CalcAlongAxis along the main axis, for one line.
+        private void GetLineTotals(int from, int to, out float totalMin, out float totalPreferred, out float totalFlexible) {
+            ChildSizes sizes = _mainSizes;
+            totalMin = totalPreferred = mainAxis == 0 ? padding.horizontal : padding.vertical;
+            totalFlexible = 0;
+            for (int k = from; k < to; k++) {
+                float scaleFactor = sizes.scale[k];
+                totalMin += sizes.min[k] * scaleFactor + _spacing;
+                totalPreferred += sizes.preferred[k] * scaleFactor + _spacing;
+                totalFlexible += sizes.flexible[k] * scaleFactor;
+            }
+            if (to > from) {
+                totalMin -= _spacing;
+                totalPreferred -= _spacing;
+            }
+            totalPreferred = Mathf.Max(totalMin, totalPreferred);
+        }
+
+        // Cross-axis size of one line: the largest child, like the cross axis of an unwrapped group.
+        private void GetLineCross(int from, int to, out float min, out float preferred, out float flexible) {
+            ChildSizes sizes = _crossSizes;
+            min = preferred = flexible = 0;
+            for (int k = from; k < to; k++) {
+                float scaleFactor = sizes.scale[k];
+                min = Mathf.Max(min, sizes.min[k] * scaleFactor);
+                preferred = Mathf.Max(preferred, sizes.preferred[k] * scaleFactor);
+                flexible = Mathf.Max(flexible, sizes.flexible[k] * scaleFactor);
+            }
+            preferred = Mathf.Max(min, preferred);
+        }
+
+        // The cross-axis input: the lines stacked with Line Spacing. Breaking needs the main-axis size, which is
+        // already set for horizontal (the layout system sets widths before computing heights) and is the previous
+        // pass's height for vertical.
+        private void CalcAcrossLines(int axis) {
+            FillOrder();
+            Read(_mainSizes, mainAxis);
+            BreakLines();
+            Read(_crossSizes, axis);
+            float combinedPadding = axis == 0 ? padding.horizontal : padding.vertical;
+            float totalMin = combinedPadding, totalPreferred = combinedPadding, totalFlexible = 0;
+            for (int line = 0, from = 0; line < _lineEnds.Count; from = _lineEnds[line++]) {
+                GetLineCross(from, _lineEnds[line], out float min, out float preferred, out float flexible);
+                float spacing = line > 0 ? _lineSpacing : 0;
+                totalMin += min + spacing;
+                totalPreferred += preferred + spacing;
+                totalFlexible = Mathf.Max(totalFlexible, flexible);
+            }
+            totalPreferred = Mathf.Max(totalMin, totalPreferred);
+            SetLayoutInputForAxis(totalMin, totalPreferred, totalFlexible, axis);
+        }
+
+        // Places the lines across the main axis. Lines get their preferred size (shrunk toward their min size like the
+        // main axis when the group is too small) and are packed by Child Alignment. Inside a line, each child is placed
+        // like on the cross axis of an unwrapped group, with the line as the available space.
+        private void PlaceAcrossLines(int axis) {
+            float combinedPadding = axis == 0 ? padding.horizontal : padding.vertical;
+            float innerSize = rectTransform.rect.size[axis] - combinedPadding;
+            bool controlSize = axis == 0 ? _childControlWidth : _childControlHeight;
+            float alignmentOnAxis = GetAlignmentOnAxis(axis);
+            ChildSizes sizes = _crossSizes;
+
+            float totalMin = 0, totalPreferred = 0;
+            for (int line = 0, from = 0; line < _lineEnds.Count; from = _lineEnds[line++]) {
+                GetLineCross(from, _lineEnds[line], out float min, out float preferred, out _);
+                float spacing = line > 0 ? _lineSpacing : 0;
+                totalMin += min + spacing;
+                totalPreferred += preferred + spacing;
+            }
+            float minMaxLerp = totalMin != totalPreferred ? Mathf.Clamp01((innerSize - totalMin) / (totalPreferred - totalMin)) : 1;
+            float used = Mathf.Lerp(totalMin, totalPreferred, minMaxLerp);
+
+            float pos = axis == 0 ? padding.left : padding.top;
+            if (innerSize > used)
+                pos += (innerSize - used) * alignmentOnAxis;
+
+            for (int line = 0, from = 0; line < _lineEnds.Count; from = _lineEnds[line++]) {
+                GetLineCross(from, _lineEnds[line], out float lineMin, out float linePreferred, out _);
+                float lineSize = Mathf.Lerp(lineMin, linePreferred, minMaxLerp);
+
+                for (int k = from; k < _lineEnds[line]; k++) {
+                    RectTransform child = _order[k];
+                    float scaleFactor = sizes.scale[k];
+
+                    float requiredSpace = Mathf.Clamp(lineSize, sizes.min[k], sizes.flexible[k] > 0 ? lineSize : sizes.preferred[k]);
+                    float startOffset = pos + (lineSize - requiredSpace * scaleFactor) * alignmentOnAxis;
+                    if (controlSize) {
+                        SetChildAlongAxisWithScale(child, axis, startOffset, requiredSpace, scaleFactor);
+                    } else {
+                        float offsetInCell = (requiredSpace - child.sizeDelta[axis]) * alignmentOnAxis;
+                        SetChildAlongAxisWithScale(child, axis, startOffset + offsetInCell, scaleFactor);
+                    }
+                }
+                pos += lineSize + _lineSpacing;
             }
         }
 
