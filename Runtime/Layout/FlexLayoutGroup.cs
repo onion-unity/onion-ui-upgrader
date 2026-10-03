@@ -129,6 +129,8 @@ namespace Onion.UI.Layout {
             for (int i = 0; i < rectChildren.Count; i++) {
                 RectTransform child = rectChildren[i];
                 GetChildSizes(child, axis, controlSize, childForceExpandSize, out float min, out float preferred, out float flexible);
+                if (alongOtherAxis && !controlSize && AlignOf(child) == AlignSelf.Stretch)
+                    min = preferred = flexible = 0;
 
                 if (useScale) {
                     float scaleFactor = child.localScale[axis];
@@ -193,6 +195,12 @@ namespace Onion.UI.Layout {
                     GetChildSizes(child, axis, controlSize, childForceExpandSize, out float min, out float preferred, out float flexible);
                     float scaleFactor = useScale ? child.localScale[axis] : 1f;
 
+                    AlignSelf align = AlignOf(child);
+                    if (align != AlignSelf.Auto) {
+                        PlaceSelf(child, axis, align, axis == 0 ? padding.left : padding.top, innerSize, min, preferred, flexible, scaleFactor, controlSize);
+                        continue;
+                    }
+
                     float requiredSpace = Mathf.Clamp(innerSize, min, flexible > 0 ? size : preferred);
                     float startOffset = GetStartOffset(axis, requiredSpace * scaleFactor);
                     if (controlSize) {
@@ -206,6 +214,36 @@ namespace Onion.UI.Layout {
                 FillOrder();
                 Read(_mainSizes, axis);
                 PlaceAlong(axis, 0, count, GetTotalMinSize(axis), GetTotalPreferredSize(axis), GetTotalFlexibleSize(axis));
+            }
+        }
+
+        // Align Self of a child's active FlexItem.
+        private static AlignSelf AlignOf(RectTransform child) {
+            return child.TryGetComponent(out FlexItem item) && item.isActiveAndEnabled ? item.alignSelf : AlignSelf.Auto;
+        }
+
+        // Places a child with its own Align Self across the main axis, in `space` starting at `start`
+        // (the group's inner size, or the line). Auto children keep the code ported from Unity instead.
+        private void PlaceSelf(RectTransform child, int axis, AlignSelf align, float start, float space,
+                               float min, float preferred, float flexible, float scaleFactor, bool controlSize) {
+            float alignment;
+            float requiredSpace;
+            if (align == AlignSelf.Stretch) {
+                // Fill the space; when the min size doesn't fit, overflow like the group's Child Alignment.
+                alignment = GetAlignmentOnAxis(axis);
+                float stretched = scaleFactor != 0 ? space / scaleFactor : space;
+                requiredSpace = controlSize ? Mathf.Max(min, stretched) : stretched;
+            } else {
+                alignment = align == AlignSelf.Start ? 0 : align == AlignSelf.Center ? 0.5f : 1;
+                requiredSpace = Mathf.Clamp(space, min, flexible > 0 ? space : preferred);
+            }
+
+            float startOffset = start + (space - requiredSpace * scaleFactor) * alignment;
+            if (controlSize || align == AlignSelf.Stretch) {
+                SetChildAlongAxisWithScale(child, axis, startOffset, requiredSpace, scaleFactor);
+            } else {
+                float offsetInCell = (requiredSpace - child.sizeDelta[axis]) * alignment;
+                SetChildAlongAxisWithScale(child, axis, startOffset + offsetInCell, scaleFactor);
             }
         }
 
@@ -262,8 +300,10 @@ namespace Onion.UI.Layout {
         // don't query LayoutUtility (a component search per call) for the same child again.
         private sealed class ChildSizes {
             public float[] min = new float[0], preferred = new float[0], flexible = new float[0], scale = new float[0];
+            // Across the main axis only.
+            public AlignSelf[] align = new AlignSelf[0];
 
-            public void Fill(System.Collections.Generic.List<RectTransform> order, int axis, bool controlSize, bool forceExpand, bool useScale) {
+            public void Fill(System.Collections.Generic.List<RectTransform> order, int axis, bool across, bool controlSize, bool forceExpand, bool useScale) {
                 int count = order.Count;
                 if (min.Length < count) {
                     int capacity = Mathf.Max(count, min.Length * 2);
@@ -271,10 +311,16 @@ namespace Onion.UI.Layout {
                     preferred = new float[capacity];
                     flexible = new float[capacity];
                     scale = new float[capacity];
+                    align = new AlignSelf[capacity];
                 }
                 for (int k = 0; k < count; k++) {
                     GetChildSizes(order[k], axis, controlSize, forceExpand, out min[k], out preferred[k], out flexible[k]);
                     scale[k] = useScale ? order[k].localScale[axis] : 1f;
+                    if (!across) continue;
+                    align[k] = AlignOf(order[k]);
+                    // Its size is driven to the line, so it would hold the line at its last size.
+                    if (align[k] == AlignSelf.Stretch && !controlSize)
+                        min[k] = preferred[k] = flexible[k] = 0;
                 }
             }
         }
@@ -282,7 +328,7 @@ namespace Onion.UI.Layout {
         private readonly ChildSizes _mainSizes = new(), _crossSizes = new();
 
         private void Read(ChildSizes sizes, int axis) {
-            sizes.Fill(_order, axis, axis == 0 ? _childControlWidth : _childControlHeight, ForceExpands(axis),
+            sizes.Fill(_order, axis, axis != mainAxis, axis == 0 ? _childControlWidth : _childControlHeight, ForceExpands(axis),
                 axis == 0 ? _childScaleWidth : _childScaleHeight);
         }
 
@@ -394,6 +440,11 @@ namespace Onion.UI.Layout {
                 for (int k = from; k < _lineEnds[line]; k++) {
                     RectTransform child = _order[k];
                     float scaleFactor = sizes.scale[k];
+
+                    if (sizes.align[k] != AlignSelf.Auto) {
+                        PlaceSelf(child, axis, sizes.align[k], pos, lineSize, sizes.min[k], sizes.preferred[k], sizes.flexible[k], scaleFactor, controlSize);
+                        continue;
+                    }
 
                     float requiredSpace = Mathf.Clamp(lineSize, sizes.min[k], sizes.flexible[k] > 0 ? lineSize : sizes.preferred[k]);
                     float startOffset = pos + (lineSize - requiredSpace * scaleFactor) * alignmentOnAxis;
