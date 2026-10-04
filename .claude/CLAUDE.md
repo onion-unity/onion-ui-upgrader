@@ -75,6 +75,8 @@ Each `Resolve` computes all four neighbors, so work shared by the directions is 
 
 The visualizer's group boxes (`TryGetBox`, `DrawGroup`) likewise transform corners with a matrix fetched once per group.
 
+Visualizer repaint (issue #16): it wraps its drawing in `NavigationUpgrader.BeginBatch`/`EndBatch`. While batching, `CollectCandidates` collects the candidate list, each candidate's `IsCandidate` (`_isCandidate`) and its world corners (`_worldCorners`, lazily) only once, shared by every `Resolve` of that repaint, so each Selectable costs one `GetWorldCorners` per repaint instead of one per origin. Outside a batch (the runtime `Update`) they are collected every `Resolve` as before, with the same cost; the neighbor rule is still only `NeighborSearch`. The visualizer itself fills `_selectables` with `AllSelectablesNoAlloc`, computes each Selectable's scope and each active group's parent once per repaint (`CollectScopes`), and checks selection with `Selection.Contains` / `Selection.activeTransform` instead of the allocating `Selection.transforms`.
+
 ## FlexLayoutGroup (issue #20)
 
 `Runtime/Layout/FlexLayoutGroup.cs` is a public component deriving from `LayoutGroup` directly, replacing `HorizontalLayoutGroup` / `VerticalLayoutGroup` (the user chose this over subclassing them and post-processing Unity's layout, so it can grow into wrap / align-self later). It is per component, with no `UIUpgraderSettings` section.
