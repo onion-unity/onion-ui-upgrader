@@ -20,8 +20,8 @@ namespace Onion.UI.Navigation {
         private static bool[] _hasRect = new bool[64];
         // Each candidate's index in _scopes (the innermost scope it is under), or -1 when it can't be picked.
         private static int[] _levels = new int[64];
-        // Whether each candidate can be picked, and its world corners (computed on first use), per collection.
-        private static bool[] _isCandidate = new bool[64];
+        // Each candidate's transform (null when it can't be picked) and world corners (computed on first use), per collection.
+        private static Transform[] _transforms = new Transform[64];
         private static Vector3[] _worldCorners = new Vector3[64 * 4];
         private static bool[] _hasCorners = new bool[64];
         private static int _count;
@@ -30,6 +30,7 @@ namespace Onion.UI.Navigation {
         private static bool _collected;
         // The origin's scope, then each parent a Pass Through search can continue into (null = root).
         private static readonly List<NavigationGroup> _scopes = new();
+        private static readonly List<Transform> _scopeTransforms = new();
         private static Matrix4x4 _toOrigin;
         private static readonly List<NavigationGroup> _chain = new();
 
@@ -332,7 +333,7 @@ namespace Onion.UI.Navigation {
                     _rects = new Rect[capacity];
                     _hasRect = new bool[capacity];
                     _levels = new int[capacity];
-                    _isCandidate = new bool[capacity];
+                    _transforms = new Transform[capacity];
                     _worldCorners = new Vector3[capacity * 4];
                     _hasCorners = new bool[capacity];
                 }
@@ -340,18 +341,22 @@ namespace Onion.UI.Navigation {
                 _count = Selectable.AllSelectablesNoAlloc(_candidates);
                 System.Array.Clear(_hasCorners, 0, _count);
                 for (int i = 0; i < _count; i++) {
-                    _isCandidate[i] = IsCandidate(_candidates[i]);
+                    var candidate = _candidates[i];
+                    _transforms[i] = IsCandidate(candidate) ? candidate.transform : null;
                 }
 
                 _collected = true;
             }
 
             _scopes.Clear();
+            _scopeTransforms.Clear();
             var scope = NavigationGroup.ScopeOf(origin.transform);
             _scopes.Add(scope);
+            _scopeTransforms.Add(scope != null ? scope.transform : null);
             while (scope != null && scope.boundary == NavigationBoundary.PassThrough) {
                 scope = scope.parent;
                 _scopes.Add(scope);
+                _scopeTransforms.Add(scope != null ? scope.transform : null);
             }
 
             _toOrigin = origin.transform.worldToLocalMatrix;
@@ -365,15 +370,15 @@ namespace Onion.UI.Navigation {
         }
 
         private static int LevelOf(int index, Selectable origin) {
-            var candidate = _candidates[index];
-            if (candidate == origin || !_isCandidate[index]) {
+            // Reference checks: everything here is alive during a Resolve, and Unity's == costs more.
+            var transform = _transforms[index];
+            if (transform is null || ReferenceEquals(_candidates[index], origin)) {
                 return -1;
             }
 
-            var transform = candidate.transform;
-            for (int level = 0; level < _scopes.Count; level++) {
-                var scope = _scopes[level];
-                if (scope == null || transform.IsChildOf(scope.transform)) {
+            for (int level = 0; level < _scopeTransforms.Count; level++) {
+                var scope = _scopeTransforms[level];
+                if (scope is null || transform.IsChildOf(scope)) {
                     return level;
                 }
             }
@@ -469,7 +474,7 @@ namespace Onion.UI.Navigation {
         private static Rect GetLocalRect(int index) {
             int offset = index * 4;
             if (!_hasCorners[index]) {
-                ((RectTransform)_candidates[index].transform).GetWorldCorners(_corners);
+                ((RectTransform)_transforms[index]).GetWorldCorners(_corners);
                 System.Array.Copy(_corners, 0, _worldCorners, offset, 4);
                 _hasCorners[index] = true;
             }
