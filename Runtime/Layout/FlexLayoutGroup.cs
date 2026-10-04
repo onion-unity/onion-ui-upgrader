@@ -197,7 +197,7 @@ namespace Onion.UI.Layout {
 
                     AlignSelf align = AlignOf(child);
                     if (align != AlignSelf.Auto) {
-                        PlaceSelf(child, axis, align, axis == 0 ? padding.left : padding.top, innerSize, min, preferred, flexible, scaleFactor, controlSize);
+                        PlaceSelf(child, axis, align, axis == 0 ? padding.left : padding.top, innerSize, size, min, preferred, flexible, scaleFactor, controlSize);
                         continue;
                     }
 
@@ -224,7 +224,9 @@ namespace Onion.UI.Layout {
 
         // Places a child with its own Align Self across the main axis, in `space` starting at `start`
         // (the group's inner size, or the line). Auto children keep the code ported from Unity instead.
-        private void PlaceSelf(RectTransform child, int axis, AlignSelf align, float start, float space,
+        // `flexibleLimit` caps a flexible child like Auto does: Unity caps it at the group's full size, not the inner
+        // size, which only differs with negative padding.
+        private void PlaceSelf(RectTransform child, int axis, AlignSelf align, float start, float space, float flexibleLimit,
                                float min, float preferred, float flexible, float scaleFactor, bool controlSize) {
             float alignment;
             float requiredSpace;
@@ -235,7 +237,7 @@ namespace Onion.UI.Layout {
                 requiredSpace = controlSize ? Mathf.Max(min, stretched) : stretched;
             } else {
                 alignment = align == AlignSelf.Start ? 0 : align == AlignSelf.Center ? 0.5f : 1;
-                requiredSpace = Mathf.Clamp(space, min, flexible > 0 ? space : preferred);
+                requiredSpace = Mathf.Clamp(space, min, flexible > 0 ? flexibleLimit : preferred);
             }
 
             float startOffset = start + (space - requiredSpace * scaleFactor) * alignment;
@@ -442,7 +444,7 @@ namespace Onion.UI.Layout {
                     float scaleFactor = sizes.scale[k];
 
                     if (sizes.align[k] != AlignSelf.Auto) {
-                        PlaceSelf(child, axis, sizes.align[k], pos, lineSize, sizes.min[k], sizes.preferred[k], sizes.flexible[k], scaleFactor, controlSize);
+                        PlaceSelf(child, axis, sizes.align[k], pos, lineSize, lineSize, sizes.min[k], sizes.preferred[k], sizes.flexible[k], scaleFactor, controlSize);
                         continue;
                     }
 
