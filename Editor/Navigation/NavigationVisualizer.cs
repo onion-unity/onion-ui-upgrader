@@ -38,7 +38,11 @@ namespace Onion.UI.Editor {
         private static readonly Dictionary<NavigationGroup, Rect?> _boxes = new();
         private static readonly HashSet<NavigationGroup> _shownGroups = new();
         private static readonly Vector3[] _corners = new Vector3[4];
-        private static Selectable[] _selectables;
+        // Per repaint: every Selectable and its scope, and each active group's parent.
+        private static Selectable[] _selectables = new Selectable[64];
+        private static NavigationGroup[] _scopes = new NavigationGroup[64];
+        private static int _count;
+        private static readonly Dictionary<NavigationGroup, NavigationGroup> _parents = new();
 
         private static bool _enabled;
 
@@ -107,17 +111,48 @@ namespace Onion.UI.Editor {
                 return;
             }
 
-            var selected = Selection.transforms;
             // While a profile is being edited, nothing in the scene is selected, so show every arrow at full strength.
             bool editingProfile = Selection.activeObject is NavigationProfile;
+            var activeTransform = Selection.activeTransform;
             // Nothing selected in the scene: draw nothing rather than a faint web of every arrow.
-            if (!editingProfile && selected.Length == 0) {
+            if (!editingProfile && activeTransform == null) {
                 return;
             }
 
-            _selectables = Selectable.allSelectablesArray;
+            CollectScopes();
             _boxes.Clear();
             _shownGroups.Clear();
+
+            NavigationUpgrader.BeginBatch();
+            try {
+                DrawAll(editingProfile, activeTransform);
+            }
+            finally {
+                NavigationUpgrader.EndBatch();
+            }
+        }
+
+        // Scopes and group parents are read many times per repaint, so the hierarchy is walked once here.
+        private static void CollectScopes() {
+            int selectableCount = Selectable.allSelectableCount;
+            if (_selectables.Length < selectableCount) {
+                int capacity = Mathf.NextPowerOfTwo(selectableCount);
+                _selectables = new Selectable[capacity];
+                _scopes = new NavigationGroup[capacity];
+            }
+
+            _count = Selectable.AllSelectablesNoAlloc(_selectables);
+            for (int i = 0; i < _count; i++) {
+                _scopes[i] = NavigationGroup.ScopeOf(_selectables[i].transform);
+            }
+
+            _parents.Clear();
+            foreach (var group in NavigationGroup.activeGroups) {
+                _parents[group] = group.parent;
+            }
+        }
+
+        private static void DrawAll(bool editingProfile, Transform activeTransform) {
 
             // A selected group shows its direct members at full strength. A selected Selectable in a group
             // shows only that group's direct members. Otherwise every Selectable is shown, like Unity's.
@@ -125,8 +160,7 @@ namespace Onion.UI.Editor {
             NavigationGroup focus = null;
             bool groupSelected = false;
             Transform overview = null;
-            var activeTransform = Selection.activeTransform;
-            if (!editingProfile && activeTransform != null) {
+            if (!editingProfile) {
                 if (activeTransform.TryGetComponent(out NavigationGroup group) && group.isActiveAndEnabled) {
                     focus = group;
                     groupSelected = true;
@@ -139,16 +173,17 @@ namespace Onion.UI.Editor {
                 }
             }
 
-            foreach (var selectable in _selectables) {
+            for (int i = 0; i < _count; i++) {
+                var selectable = _selectables[i];
+                if (focus != null && _scopes[i] != focus) {
+                    continue;
+                }
+
                 if (!StageUtility.IsGameObjectRenderedByCamera(selectable.gameObject, Camera.current)) {
                     continue;
                 }
 
-                if (focus != null && NavigationGroup.ScopeOf(selectable.transform) != focus) {
-                    continue;
-                }
-
-                bool active = editingProfile || groupSelected || Array.IndexOf(selected, selectable.transform) >= 0;
+                bool active = editingProfile || groupSelected || Selection.Contains(selectable.gameObject);
                 Draw(selectable, active, collectGroups: active && overview == null);
             }
 
@@ -315,8 +350,8 @@ namespace Onion.UI.Editor {
             var min = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
             var max = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
 
-            foreach (var selectable in _selectables) {
-                if (selectable.transform is not RectTransform rectTransform || NavigationGroup.ScopeOf(rectTransform) != group) {
+            for (int i = 0; i < _count; i++) {
+                if (_scopes[i] != group || _selectables[i].transform is not RectTransform rectTransform) {
                     continue;
                 }
 
@@ -325,7 +360,7 @@ namespace Onion.UI.Editor {
             }
 
             foreach (var child in NavigationGroup.activeGroups) {
-                if (child.parent != group || !TryGetBox(child, out var childBox)) {
+                if (_parents[child] != group || !TryGetBox(child, out var childBox)) {
                     continue;
                 }
 

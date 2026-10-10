@@ -20,8 +20,17 @@ namespace Onion.UI.Navigation {
         private static bool[] _hasRect = new bool[64];
         // Each candidate's index in _scopes (the innermost scope it is under), or -1 when it can't be picked.
         private static int[] _levels = new int[64];
+        // Each candidate's transform (null when it can't be picked) and world corners (computed on first use), per collection.
+        private static Transform[] _transforms = new Transform[64];
+        private static Vector3[] _worldCorners = new Vector3[64 * 4];
+        private static bool[] _hasCorners = new bool[64];
+        private static int _count;
+        // While batching, the candidates are collected once and shared by every Resolve until EndBatch.
+        private static bool _batching;
+        private static bool _collected;
         // The origin's scope, then each parent a Pass Through search can continue into (null = root).
         private static readonly List<NavigationGroup> _scopes = new();
+        private static readonly List<Transform> _scopeTransforms = new();
         private static Matrix4x4 _toOrigin;
         private static readonly List<NavigationGroup> _chain = new();
 
@@ -229,6 +238,20 @@ namespace Onion.UI.Navigation {
             return true;
         }
 
+        /// <summary>
+        /// Until <see cref="EndBatch"/>, every <see cref="TryResolve(Selectable, out UINavigation)"/> shares one
+        /// collection of the candidates and their world corners, for resolving many Selectables while nothing changes
+        /// (the Scene view visualizer's repaint).
+        /// </summary>
+        internal static void BeginBatch() {
+            _batching = true;
+            _collected = false;
+        }
+
+        internal static void EndBatch() {
+            _batching = false;
+        }
+
         // Takes the mode separately, since the tracked Selectable's navigation holds what was applied.
         private static bool IsUpgradable(Selectable selectable, UINavigation.Mode mode) {
             bool isAutomatic = mode == UINavigation.Mode.Automatic
@@ -302,43 +325,60 @@ namespace Onion.UI.Navigation {
 
         // Also computes what every direction shares: the searchable scopes and each candidate's level in them.
         private static int CollectCandidates(Selectable origin) {
-            int selectableCount = Selectable.allSelectableCount;
-            if (_candidates.Length < selectableCount) {
-                int capacity = Mathf.NextPowerOfTwo(selectableCount);
-                _candidates = new Selectable[capacity];
-                _rects = new Rect[capacity];
-                _hasRect = new bool[capacity];
-                _levels = new int[capacity];
+            if (!_batching || !_collected) {
+                int selectableCount = Selectable.allSelectableCount;
+                if (_candidates.Length < selectableCount) {
+                    int capacity = Mathf.NextPowerOfTwo(selectableCount);
+                    _candidates = new Selectable[capacity];
+                    _rects = new Rect[capacity];
+                    _hasRect = new bool[capacity];
+                    _levels = new int[capacity];
+                    _transforms = new Transform[capacity];
+                    _worldCorners = new Vector3[capacity * 4];
+                    _hasCorners = new bool[capacity];
+                }
+
+                _count = Selectable.AllSelectablesNoAlloc(_candidates);
+                System.Array.Clear(_hasCorners, 0, _count);
+                for (int i = 0; i < _count; i++) {
+                    var candidate = _candidates[i];
+                    _transforms[i] = IsCandidate(candidate) ? candidate.transform : null;
+                }
+
+                _collected = true;
             }
 
             _scopes.Clear();
+            _scopeTransforms.Clear();
             var scope = NavigationGroup.ScopeOf(origin.transform);
             _scopes.Add(scope);
+            _scopeTransforms.Add(scope != null ? scope.transform : null);
             while (scope != null && scope.boundary == NavigationBoundary.PassThrough) {
                 scope = scope.parent;
                 _scopes.Add(scope);
+                _scopeTransforms.Add(scope != null ? scope.transform : null);
             }
 
             _toOrigin = origin.transform.worldToLocalMatrix;
 
-            int count = Selectable.AllSelectablesNoAlloc(_candidates);
-            System.Array.Clear(_hasRect, 0, count);
-            for (int i = 0; i < count; i++) {
-                _levels[i] = LevelOf(_candidates[i], origin);
+            System.Array.Clear(_hasRect, 0, _count);
+            for (int i = 0; i < _count; i++) {
+                _levels[i] = LevelOf(i, origin);
             }
 
-            return count;
+            return _count;
         }
 
-        private static int LevelOf(Selectable candidate, Selectable origin) {
-            if (candidate == origin || !IsCandidate(candidate)) {
+        private static int LevelOf(int index, Selectable origin) {
+            // Reference checks: everything here is alive during a Resolve, and Unity's == costs more.
+            var transform = _transforms[index];
+            if (transform is null || ReferenceEquals(_candidates[index], origin)) {
                 return -1;
             }
 
-            var transform = candidate.transform;
-            for (int level = 0; level < _scopes.Count; level++) {
-                var scope = _scopes[level];
-                if (scope == null || transform.IsChildOf(scope.transform)) {
+            for (int level = 0; level < _scopeTransforms.Count; level++) {
+                var scope = _scopeTransforms[level];
+                if (scope is null || transform.IsChildOf(scope)) {
                     return level;
                 }
             }
@@ -395,7 +435,7 @@ namespace Onion.UI.Navigation {
                 }
 
                 if (!_hasRect[i]) {
-                    _rects[i] = GetLocalRect((RectTransform)_candidates[i].transform);
+                    _rects[i] = GetLocalRect(i);
                     _hasRect[i] = true;
                 }
 
@@ -430,14 +470,19 @@ namespace Onion.UI.Navigation {
                 && selectable.transform is RectTransform;
         }
 
-        // The rect in the origin's local space.
-        private static Rect GetLocalRect(RectTransform rectTransform) {
-            rectTransform.GetWorldCorners(_corners);
+        // The candidate's rect in the origin's local space.
+        private static Rect GetLocalRect(int index) {
+            int offset = index * 4;
+            if (!_hasCorners[index]) {
+                ((RectTransform)_transforms[index]).GetWorldCorners(_corners);
+                System.Array.Copy(_corners, 0, _worldCorners, offset, 4);
+                _hasCorners[index] = true;
+            }
 
-            Vector2 min = _toOrigin.MultiplyPoint3x4(_corners[0]);
+            Vector2 min = _toOrigin.MultiplyPoint3x4(_worldCorners[offset]);
             Vector2 max = min;
-            for (int i = 1; i < _corners.Length; i++) {
-                Vector2 point = _toOrigin.MultiplyPoint3x4(_corners[i]);
+            for (int i = 1; i < 4; i++) {
+                Vector2 point = _toOrigin.MultiplyPoint3x4(_worldCorners[offset + i]);
                 min = Vector2.Min(min, point);
                 max = Vector2.Max(max, point);
             }
