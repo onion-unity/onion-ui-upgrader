@@ -103,7 +103,7 @@ uGUI handles hover and selection separately. After selecting A with the keyboard
 | Input mode | Switched by | Focused |
 | --- | --- | --- |
 | **Navigation** (initial) | Move or Submit (and optionally Cancel) | The selection |
-| **Pointer** | Moving the pointer, pressing a pointer button, or a touch | The hovered Selectable, when clicking it would select it. Otherwise nothing. |
+| **Pointer** | Moving the pointer, pressing a pointer button, or a touch | The hovered Selectable, when it is interactable. Otherwise nothing. |
 
 A layout moving under a still cursor or the scroll wheel doesn't switch to Pointer mode. Clicking still selects as usual, so input fields, Cancel, and Navigation Group features keep working in Pointer mode.
 
@@ -112,8 +112,34 @@ A layout moving under a still cursor or the scroll wheel doesn't switch to Point
 | **Continue From Hover** | When switching to Navigation, the hovered Selectable becomes the selection before the input is handled, so the move or submit starts from what was highlighted. Off: it starts from the existing selection, like Unity. |
 | **Reveal On First Input** | When switching to Navigation and the selection wasn't highlighted, the first move or submit only shows the selection. A held move goes on after the usual repeat delay. When nothing is selected, Selection Recovery handles the first move instead. |
 | **Cancel Switches Mode** | Cancel also switches to Navigation. Off by default, so closing a popup with Esc doesn't bring up a highlight for mouse users. |
+| **Project Wide Style** | The [Selectable Style](#selectable-upgrader) of Selectable Upgraders that don't set their own. Click **+** to create one. |
 
-Scripts read the result from `Onion.UI.Focus.UIFocus`: `mode`, `focused`, and the `modeChanged` / `focusChanged` events, updated once per frame in LateUpdate. While the Focus upgrade is off, `mode` is always `Navigation` and `focused` is the selection. The Focus section only decides what is focused. Highlighting it is up to your code for now. Input is read from `StandaloneInputModule` or `InputSystemUIInputModule`; custom input modules are not supported.
+Scripts read the result from `Onion.UI.Focus.UIFocus`: `mode`, `focused`, and the `modeChanged` / `focusChanged` events, updated once per frame in LateUpdate. While the Focus upgrade is off, `mode` is always `Navigation` and `focused` is the selection. The Focus section only decides what is focused; a [Selectable Upgrader](#selectable-upgrader) shows it. Input is read from `StandaloneInputModule` or `InputSystemUIInputModule`; custom input modules are not supported.
+
+## Selectable Upgrader
+
+Add **Add Component > Onion > UI > Selectable Upgrader** next to a Button, Toggle, or any other Selectable to show it in one of four states, so only the focused Selectable is highlighted. It needs the [Focus](#focus) section to be on; while it is off, the Selectable behaves as in Unity.
+
+| State | When |
+| --- | --- |
+| **Disabled** | Not interactable (including through a CanvasGroup) |
+| **Pressed** | The pointer is held down on it while it is hovered, or Submit is held while it is selected |
+| **Focused** | It is the focus: hovered in Pointer mode, selected in Navigation mode |
+| **Normal** | Otherwise |
+
+How each state looks comes from a **Selectable Style** asset (**Assets > Create > Onion > UI > Selectable Style**), shared by every Selectable using it. A style is a list of effects, applied in order; click **+** to add one.
+
+| Effect | Description |
+| --- | --- |
+| **Selectable Transition** | Uses the Selectable's own Transition settings (Color Tint, Sprite Swap or Animation). In a new style by default, so your existing setup keeps working with the problems fixed. |
+| **Color Tint** / **Sprite Swap** / **Animation** | The same transitions with their values set in the style. |
+
+Focused uses the **Highlighted** slot in Pointer mode and the **Selected** slot in Navigation mode, so a keyboard or gamepad focus can look stronger than a hover. With Unity's default colors both look the same.
+
+- While a Selectable Upgrader with the Selectable Transition effect is active, the Selectable's **Transition** is set to None, so Unity doesn't apply it as well, and restored when it stops. Avoid changing `transition` from scripts meanwhile.
+- Submit is still handled when pressed (`onClick` runs on key down); only the look is held until release.
+- To add your own effect, derive from `Onion.UI.Selectables.SelectableEffect` and implement `Apply`; it then shows up in the style's **+** menu. A style is shared, so keep per-Selectable state in the object returned by `CreateData`, and undo your changes in `Release`.
+- **On State Changed** (and the `stateChanged` event) passes the new state and the input mode, for one-off effects such as sounds.
 
 ## Turning it off
 
