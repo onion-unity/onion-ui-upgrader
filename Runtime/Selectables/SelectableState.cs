@@ -1,6 +1,6 @@
 namespace Onion.UI.Selectables {
     /// <summary>
-    /// The visible state of a Selectable with a <see cref="SelectableUpgrader"/>.
+    /// The visible state of a Selectable with a <see cref="TransitionUpgrader"/>.
     /// </summary>
     public enum SelectableState {
         Normal,

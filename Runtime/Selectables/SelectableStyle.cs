@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Onion.UI.Selectables {
     /// <summary>
-    /// How Selectables with a <see cref="SelectableUpgrader"/> look in each state: a list of effects, applied in order.
+    /// How Selectables with a <see cref="TransitionUpgrader"/> look in each state: a list of effects, applied in order.
     /// </summary>
     [CreateAssetMenu(fileName = "SelectableStyle", menuName = "Onion/UI/Selectable Style")]
     public sealed class SelectableStyle : ScriptableObject {

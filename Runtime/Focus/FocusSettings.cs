@@ -20,7 +20,7 @@ namespace Onion.UI.Focus {
         [SerializeField]
         internal bool cancelSwitchesMode;
 
-        [Tooltip("Style of Selectable Upgraders that don't set their own.")]
+        [Tooltip("Style of Transition Upgraders that don't set their own.")]
         [SerializeField]
         internal SelectableStyle projectWideStyle;
 

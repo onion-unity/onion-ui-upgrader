@@ -1,8 +1,6 @@
-using System;
 using System.Collections.Generic;
 using Onion.UI.Focus;
 using UnityEngine;
-using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
@@ -12,24 +10,12 @@ namespace Onion.UI.Selectables {
     /// <see cref="SelectableStyle"/>, so only the one focused Selectable (<see cref="UIFocus.focused"/>) is
     /// highlighted. Does nothing while the Focus upgrade is off, which leaves the Selectable to Unity.
     /// </summary>
-    [AddComponentMenu("Onion/UI/Selectable Upgrader")]
+    [AddComponentMenu("Onion/UI/Transition Upgrader")]
     [RequireComponent(typeof(Selectable))]
     [DisallowMultipleComponent]
-    public sealed class SelectableUpgrader : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, ISubmitHandler {
-        [Serializable]
-        public sealed class StateChangedEvent : UnityEvent<SelectableState, InputMode> {
-        }
-
+    public sealed class TransitionUpgrader : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, ISubmitHandler {
         [Tooltip("How this Selectable looks in each state.\nWhen empty, the project-wide style in the Focus settings is used.")]
         public SelectableStyle style;
-
-        [Tooltip("Raised when the state changes, and when the input mode changes while Focused or Pressed.")]
-        public StateChangedEvent onStateChanged = new();
-
-        /// <summary>
-        /// Raised with the new state and the input mode, like <see cref="onStateChanged"/>.
-        /// </summary>
-        public event Action<SelectableState, InputMode> stateChanged;
 
         private Selectable _selectable;
         // The effects being applied and each one's data, taken from the style when applying started.
@@ -88,9 +74,6 @@ namespace Onion.UI.Selectables {
             for (int i = 0; i < _effects.Count; i++) {
                 _effects[i].Apply(_selectable, _data[i], state, mode, instant);
             }
-
-            stateChanged?.Invoke(state, mode);
-            onStateChanged.Invoke(state, mode);
         }
 
         private SelectableState FindState() {
