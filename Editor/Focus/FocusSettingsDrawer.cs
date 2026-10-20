@@ -1,4 +1,5 @@
 using Onion.UI.Focus;
+using Onion.UI.Selectables;
 using UnityEditor;
 
 namespace Onion.UI.Editor {
@@ -10,6 +11,7 @@ namespace Onion.UI.Editor {
             EditorGUILayout.PropertyField(focus.FindPropertyRelative(nameof(FocusSettings.continueFromHover)));
             EditorGUILayout.PropertyField(focus.FindPropertyRelative(nameof(FocusSettings.revealOnFirstInput)));
             EditorGUILayout.PropertyField(focus.FindPropertyRelative(nameof(FocusSettings.cancelSwitchesMode)));
+            NavigationSettingsDrawer.AssetField<SelectableStyle>(focus.FindPropertyRelative(nameof(FocusSettings.projectWideStyle)), "Selectable Style");
         }
     }
 }

@@ -108,8 +108,8 @@ namespace Onion.UI.Focus {
             return !SelectionRecovery.IsLost(selected) && selected.TryGetComponent(out Selectable selectable) ? selectable : null;
         }
 
-        // The Selectable under the pointer's topmost hit, when a click would select it
-        // (interactable and not None, like Selectable.OnPointerDown).
+        // The Selectable under the pointer's topmost hit, when it is active and interactable. Navigation None is
+        // included, since it still reacts to the pointer (Continue From Hover doesn't select it, like a click).
         private Selectable FindHovered(EventSystem eventSystem) {
             if (!UIInput.TryGetPointerPosition(eventSystem, out var position)) {
                 return null;
@@ -121,7 +121,7 @@ namespace Onion.UI.Focus {
             }
 
             var hovered = hit != null ? hit.GetComponentInParent<Selectable>() : null;
-            return NavigationUpgrader.IsUsable(hovered) ? hovered : null;
+            return hovered != null && hovered.isActiveAndEnabled && hovered.IsInteractable() ? hovered : null;
         }
 
         // The topmost hit at the position, for when the module's own result can't be read.

@@ -82,6 +82,28 @@ namespace Onion.UI {
             }
         }
 
+        /// <summary>
+        /// Whether the submit input is held down. False for custom modules.
+        /// </summary>
+        internal static bool IsSubmitHeld(EventSystem eventSystem) {
+            if (!eventSystem.sendNavigationEvents) {
+                return false;
+            }
+
+            switch (eventSystem.currentInputModule) {
+                case StandaloneInputModule standalone:
+                    // BaseInput has no GetButton, so an inputOverride can't change this.
+                    return Input.GetButton(standalone.submitButton);
+#if ONION_INPUTSYSTEM
+                case InputSystemUIInputModule inputSystem:
+                    var reference = inputSystem.submit;
+                    return reference != null && reference.action != null && reference.action.IsPressed();
+#endif
+                default:
+                    return false;
+            }
+        }
+
         internal static bool WasCancelPressed(EventSystem eventSystem) {
             if (!eventSystem.sendNavigationEvents) {
                 return false;

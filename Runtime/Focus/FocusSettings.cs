@@ -1,4 +1,5 @@
 using System;
+using Onion.UI.Selectables;
 using UnityEngine;
 
 namespace Onion.UI.Focus {
@@ -18,6 +19,10 @@ namespace Onion.UI.Focus {
         [Tooltip("Whether Cancel also switches to keyboard/gamepad. Off: only Move and Submit do.")]
         [SerializeField]
         internal bool cancelSwitchesMode;
+
+        [Tooltip("Style of Transition Upgraders that don't set their own.")]
+        [SerializeField]
+        internal SelectableStyle projectWideStyle;
 
         /// <summary>
         /// The settings while the upgrade is on, else null.
