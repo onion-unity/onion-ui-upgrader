@@ -88,8 +88,9 @@ namespace Onion.UI.Selectables {
             _submitDown = _submitDown && selected && (Time.frameCount == _submitFrame || UIInput.IsSubmitHeld(eventSystem));
 
             bool focused = UIFocus.focused == _selectable;
-            // Like Unity, a pointer press shows only while the pointer is over this Selectable.
-            if (_submitDown || (_pointerDown && focused)) {
+            // Like Unity, a pointer press shows only while the pointer is over this Selectable. A hotkey shows
+            // while its key is held, wherever the selection is.
+            if (_submitDown || (_pointerDown && focused) || HotkeyUpgrader.IsHeld(_selectable)) {
                 return SelectableState.Pressed;
             }
 
