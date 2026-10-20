@@ -161,6 +161,16 @@ Focused uses the **Highlighted** slot in Pointer mode and the **Selected** slot 
   For anything else, such as a sound when focused, derive from `SelectableEffect` and implement `Apply(target, data, state, mode, instant)`. A style is shared, so keep per-Selectable state in the object returned by `CreateData`, and undo your changes in `Release`.
 - Scripts can read the current state from `TransitionUpgrader.state`.
 
+## Hotkey Upgrader
+
+Add **Add Component > Onion > UI > Hotkey Upgrader** (or **Upgrade > Add Hotkey Upgrader** in the context menu of a Button or Toggle) to press it with a key or gamepad button, such as B for Back or X for Sort. The hotkey sends Submit, so it acts exactly like pressing the Button or Toggle with Submit, and the selection doesn't move. It works without any settings section, independently of Navigation and Focus.
+
+- **Binding:** with the Input System package, an Input Action: set the key right in the inspector, or reference an action from an asset. A referenced action that is off is enabled while a Hotkey Upgrader needs it. Without the Input System, a `KeyCode` or an Input Manager button name.
+- **Same key on several:** only one reacts, the one enabled most recently that is active and interactable. A popup's Close button wins over the Back button behind it, and the Back button wins again once the popup closes. Pressing two different keys together presses both. If the enable order differs from what's on top (e.g. a button behind an open popup is disabled and enabled again), the wrong one wins; blocking the background with a CanvasGroup (not interactable) avoids it.
+- **Ignored:** while an InputField or TMP_InputField is being edited, and when the same frame's Submit, Cancel or move would already be handled by the selection (e.g. Enter as a hotkey while another button is selected).
+- **Pressed while held:** with a [Transition Upgrader](#transition-upgrader) on the same Selectable, it shows as Pressed until the key is released.
+- Supported on Button and Toggle. InputField and Dropdown take the selection on Submit, so they aren't supported.
+
 ## Turning it off
 
 Uncheck the box in the **Navigation** header in **Project Settings > Onion > UI Upgrader**. Every Selectable then uses Unity's default navigation. The assigned profile is kept, so upgrading again restores the same behavior. Unchecking the **Focus** header likewise returns to Unity's hover and selection behavior.
