@@ -8,6 +8,8 @@ namespace Onion.UI.Editor {
     /// </summary>
     [CustomPropertyDrawer(typeof(StateValues<>))]
     internal sealed class StateValuesDrawer : PropertyDrawer {
+        private const float BottomSpace = 4f;
+
         private static readonly string[] _slots = {
             nameof(StateValues<int>.normal),
             nameof(StateValues<int>.highlighted),
@@ -24,8 +26,6 @@ namespace Onion.UI.Editor {
                 EditorGUI.PropertyField(rect, child);
                 rect.y += rect.height + EditorGUIUtility.standardVerticalSpacing;
             }
-
-            
         }
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label) {
@@ -34,7 +34,8 @@ namespace Onion.UI.Editor {
                 height += EditorGUI.GetPropertyHeight(property.FindPropertyRelative(slot)) + EditorGUIUtility.standardVerticalSpacing;
             }
 
-            return height - EditorGUIUtility.standardVerticalSpacing;
+            // The last slot's spacing plus a little more, so the fields below don't read as a sixth slot.
+            return height + BottomSpace;
         }
     }
 }
