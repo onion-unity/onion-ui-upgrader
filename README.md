@@ -171,6 +171,15 @@ Add **Add Component > Onion > UI > Hotkey Upgrader** (or **Upgrade > Add Hotkey 
 - **Pressed while held:** with a [Transition Upgrader](#transition-upgrader) on the same Selectable, it shows as Pressed until the key is released.
 - Supported on Button and Toggle. InputField and Dropdown take the selection on Submit, so they aren't supported.
 
+## Hold Button / Hold Toggle
+
+For buttons that shouldn't be pressed by accident, such as Delete Save or Quit, use **Hold Button** or **Hold Toggle** (Add Component > Onion > UI). They click or switch only after being held for **Hold Duration** seconds (unscaled time); a shorter press does nothing. To change an existing one, use **Upgrade > Convert to Hold Button** in the context menu of a Button (**Convert to Hold Toggle** on a Toggle). They derive from Button and Toggle, so the values and every reference to the component are kept.
+
+- **Holding:** a left pointer press holds while it stays down over the Selectable; moving out cancels, like Unity's click. Submit holds while the submit input is held and the Selectable stays selected. A [Hotkey Upgrader](#hotkey-upgrader) on it holds while its key is held, with nothing to set up.
+- **It fires once the time is reached**, without waiting for the release, and not again until released and pressed again.
+- **Gauge:** **On Hold Progress** is called with the progress from 0 to 1 while held, 1 when it fires, and 0 when released or cancelled. Hook up an Image's `fillAmount` to it in the inspector for a simple gauge. Scripts can also read `holdProgress`.
+- **Limits:** these are subclasses, so a project's own Button subclass can't be combined with them. With a custom input module, Submit can't be read as held, so only the pointer and hotkeys work. A held Submit doesn't show Unity's Pressed flash; add a [Transition Upgrader](#transition-upgrader) to show Pressed while held.
+
 ## Turning it off
 
 Uncheck the box in the **Navigation** header in **Project Settings > Onion > UI Upgrader**. Every Selectable then uses Unity's default navigation. The assigned profile is kept, so upgrading again restores the same behavior. Unchecking the **Focus** header likewise returns to Unity's hover and selection behavior.
