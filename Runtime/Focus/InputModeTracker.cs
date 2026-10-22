@@ -70,12 +70,12 @@ namespace Onion.UI.Focus {
                 return false;
             }
 
-            if (settings.continueFromHover && NavigationUpgrader.IsUsable(shown)) {
+            if (settings.continueFromHover && UISelection.IsUsable(shown)) {
                 eventSystem.SetSelectedGameObject(shown.gameObject);
                 return false;
             }
 
-            if (!settings.revealOnFirstInput || SelectionRecovery.IsLost(selected)) {
+            if (!settings.revealOnFirstInput || UISelection.IsLost(selected)) {
                 return false;
             }
 
@@ -105,7 +105,7 @@ namespace Onion.UI.Focus {
 
         private static Selectable SelectionOf(EventSystem eventSystem) {
             var selected = eventSystem.currentSelectedGameObject;
-            return !SelectionRecovery.IsLost(selected) && selected.TryGetComponent(out Selectable selectable) ? selectable : null;
+            return !UISelection.IsLost(selected) && selected.TryGetComponent(out Selectable selectable) ? selectable : null;
         }
 
         // The Selectable under the pointer's topmost hit, when it is active and interactable. Navigation None is

@@ -32,7 +32,7 @@ namespace Onion.UI.Navigation {
             }
 
             var selected = eventSystem.currentSelectedGameObject;
-            if (!IsLost(selected)) {
+            if (!UISelection.IsLost(selected)) {
                 if (selected.TryGetComponent(out Selectable selectable)) {
                     Remember(selectable);
                 }
@@ -49,15 +49,6 @@ namespace Onion.UI.Navigation {
             if (target != null) {
                 eventSystem.SetSelectedGameObject(target.gameObject);
             }
-        }
-
-        // Input modules don't send events to inactive objects or disabled components, so these can't move either.
-        internal static bool IsLost(GameObject selected) {
-            if (selected == null || !selected.activeInHierarchy) {
-                return true;
-            }
-
-            return selected.TryGetComponent(out Selectable selectable) && !selectable.isActiveAndEnabled;
         }
 
         private void Remember(Selectable selectable) {
@@ -77,7 +68,7 @@ namespace Onion.UI.Navigation {
         // The last selection, else for each of its groups still enabled (innermost first) the group's entry
         // or its member nearest the last position, else the nearest Selectable anywhere.
         private Selectable FindTarget() {
-            if (NavigationUpgrader.IsUsable(_last)) {
+            if (UISelection.IsUsable(_last)) {
                 return _last;
             }
 
@@ -106,7 +97,7 @@ namespace Onion.UI.Navigation {
             float nearestDistance = float.PositiveInfinity;
             for (int i = 0; i < count; i++) {
                 var candidate = _candidates[i];
-                if (!NavigationUpgrader.IsUsable(candidate)) {
+                if (!UISelection.IsUsable(candidate)) {
                     continue;
                 }
 

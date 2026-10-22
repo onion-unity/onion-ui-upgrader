@@ -126,7 +126,7 @@ namespace Onion.UI.Navigation {
         /// </summary>
         internal bool HoldsSelection() {
             var selected = CurrentSelection();
-            return SelectionRecovery.IsLost(selected) || IsUnder(selected);
+            return UISelection.IsLost(selected) || IsUnder(selected);
         }
 
         private bool IsUnder(GameObject selected) {
