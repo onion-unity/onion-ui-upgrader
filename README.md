@@ -189,6 +189,7 @@ By default a ScrollRect doesn't follow the selection, so moving with a keyboard 
 - **Smooth Time:** about how long the scroll takes, in unscaled seconds; 0 jumps instantly. A new selection during the scroll continues from where it is, and a selection moving out of the ScrollRect lets the scroll finish.
 - **When it scrolls:** on every selection change (navigation, scripts, Select On Enable, Restore On Disable, Selection Recovery) except one made by a pointer press, since a clicked item is already on screen. Nothing happens while the ScrollRect is being dragged, and the mouse wheel stops a scroll in progress.
 - Nested ScrollRects each scroll their own content, if each has one.
+- **Buttons around the ScrollRect:** add a [Navigation Group](#navigation-group) with **Pass Through** to the Content (needs the Navigation upgrade). Without it, a fast move while the scroll is still catching up can pick a button next to the ScrollRect instead of the next item, since the hidden items share its space. With it, moves search the list first and leave it only from its last item. Together with Skip Clipped Selectables, moves from those buttons enter only the visible items.
 
 ## Turning it off
 
