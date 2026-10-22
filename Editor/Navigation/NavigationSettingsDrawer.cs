@@ -17,6 +17,7 @@ namespace Onion.UI.Editor {
             UIUpgraderEditorGUI.AssetField<NavigationProfile>(profile, "Navigation Profile");
 
             EditorGUILayout.PropertyField(navigation.FindPropertyRelative(nameof(NavigationSettings.recoverSelection)));
+            EditorGUILayout.PropertyField(navigation.FindPropertyRelative(nameof(NavigationSettings.skipClippedSelectables)));
         }
     }
 }
