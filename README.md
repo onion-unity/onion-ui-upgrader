@@ -181,6 +181,15 @@ For buttons that shouldn't be pressed by accident, such as Delete Save or Quit, 
 - **Gauge:** **On Hold Progress** is called with the progress from 0 to 1 while held, 1 when it fires, and 0 when released or cancelled. Hook up an Image's `fillAmount` to it in the inspector for a simple gauge. Scripts can also read `holdProgress`.
 - **Limits:** these are subclasses, so a project's own Button subclass can't be combined with them. With a custom input module, Submit can't be read as held, so only the pointer and hotkeys work. A held Submit doesn't show Unity's Pressed flash; add a [Transition Upgrader](#transition-upgrader) to show Pressed while held.
 
+## ScrollRect Upgrader
+
+By default a ScrollRect doesn't follow the selection, so moving with a keyboard or gamepad to an item outside the viewport leaves it out of sight. Add **Add Component > Onion > UI > ScrollRect Upgrader** (or **Upgrade > Add ScrollRect Upgrader** in the context menu of a ScrollRect) to scroll to the selection whenever it changes to an item under the content. It works without any settings section, independently of Navigation and Focus.
+
+- **Alignment:** **Nearest** scrolls only when the item is outside the viewport, and only as far as needed, keeping **Padding** between the item and the viewport's edge. **Center** brings the item to the center of the viewport on every change. Either way it never scrolls past the content's edges (except with Unrestricted movement), and content smaller than the viewport doesn't scroll.
+- **Smooth Time:** about how long the scroll takes, in unscaled seconds; 0 jumps instantly. A new selection during the scroll continues from where it is, and a selection moving out of the ScrollRect lets the scroll finish.
+- **When it scrolls:** on every selection change (navigation, scripts, Select On Enable, Restore On Disable, Selection Recovery) except one made by a pointer press, since a clicked item is already on screen. Nothing happens while the ScrollRect is being dragged, and the mouse wheel stops a scroll in progress.
+- Nested ScrollRects each scroll their own content, if each has one.
+
 ## Turning it off
 
 Uncheck the box in the **Navigation** header in **Project Settings > Onion > UI Upgrader**. Every Selectable then uses Unity's default navigation. The assigned profile is kept, so upgrading again restores the same behavior. Unchecking the **Focus** header likewise returns to Unity's hover and selection behavior.
