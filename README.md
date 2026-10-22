@@ -191,6 +191,22 @@ By default a ScrollRect doesn't follow the selection, so moving with a keyboard 
 - Nested ScrollRects each scroll their own content, if each has one.
 - **Buttons around the ScrollRect:** add a [Navigation Group](#navigation-group) with **Pass Through** to the Content (needs the Navigation upgrade). Without it, a fast move while the scroll is still catching up can pick a button next to the ScrollRect instead of the next item, since the hidden items share its space. With it, moves search the list first and leave it only from its last item. Together with Skip Clipped Selectables, moves from those buttons enter only the visible items.
 
+## Flex Layout Group
+
+Horizontal and Vertical Layout Group can only line children up from one side, the center or the other side. **Flex Layout Group** (Add Component > Onion > UI) replaces both, with space distribution and wrapping on top, like CSS flexbox. To change an existing one, use **Upgrade > Convert to Flex Layout Group** in the context menu of a Horizontal or Vertical Layout Group; the values are copied and the component keeps its place on the GameObject. References to the old component from other components are lost, since it is a different type.
+
+Every setting Unity's groups have works the same, so the same values give the same layout. On top of that:
+
+| Setting | Description |
+| --- | --- |
+| **Direction** | `Horizontal` or `Vertical`: the axis children are laid out along. |
+| **Justify** | How leftover space along Direction is shared: `Child Alignment` (Unity's behavior), `Space Between`, `Space Around`, or `Space Evenly`. Spacing stays the minimum gap. While a value other than Child Alignment is set, Child Force Expand along Direction is off, since it would take the leftover space itself. |
+| **Wrap** | Children that don't fit along Direction move to a new line. Each line is laid out on its own (Justify included), lines are as big as their largest child, separated by **Line Spacing**, and placed by Child Alignment. |
+
+Child Force Expand is off by default, unlike Unity's groups.
+
+Add **Flex Item** (Add Component > Onion > UI) to a child to override its placement across Direction with **Align Self**: `Start`, `Center`, `End`, or `Stretch` (sized to the group, or to its line with Wrap, even when Control Child Size is off). `Auto` follows the group's Child Alignment.
+
 ## Turning it off
 
 Uncheck the box in the **Navigation** header in **Project Settings > Onion > UI Upgrader**. Every Selectable then uses Unity's default navigation. The assigned profile is kept, so upgrading again restores the same behavior. Unchecking the **Focus** header likewise returns to Unity's hover and selection behavior.
