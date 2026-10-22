@@ -187,7 +187,7 @@ namespace Onion.UI.Navigation {
             NavigationGroup restore = null;
             for (int i = pending.Count - 1; i >= 0; i--) {
                 var group = pending[i];
-                if (group != null && IsUsable(group.restoreTarget)) {
+                if (group != null && UISelection.IsUsable(group.restoreTarget)) {
                     restore = group;
                     break;
                 }
@@ -200,15 +200,11 @@ namespace Onion.UI.Navigation {
         // The last selection when remembered and still usable, else the default when usable, else null.
         internal static Selectable EntryOf(NavigationGroup group) {
             var last = group.lastSelected;
-            if (group.rememberSelection && IsUsable(last) && last.transform.IsChildOf(group.transform)) {
+            if (group.rememberSelection && UISelection.IsUsable(last) && last.transform.IsChildOf(group.transform)) {
                 return last;
             }
 
-            return IsUsable(group.defaultSelectable) ? group.defaultSelectable : null;
-        }
-
-        internal static bool IsUsable(Selectable selectable) {
-            return selectable != null && selectable.isActiveAndEnabled && IsCandidate(selectable);
+            return UISelection.IsUsable(group.defaultSelectable) ? group.defaultSelectable : null;
         }
 
         /// <summary>
@@ -342,7 +338,7 @@ namespace Onion.UI.Navigation {
                 System.Array.Clear(_hasCorners, 0, _count);
                 for (int i = 0; i < _count; i++) {
                     var candidate = _candidates[i];
-                    _transforms[i] = IsCandidate(candidate) ? candidate.transform : null;
+                    _transforms[i] = UISelection.IsCandidate(candidate) ? candidate.transform : null;
                 }
 
                 _collected = true;
@@ -462,12 +458,6 @@ namespace Onion.UI.Navigation {
             }
 
             return picked;
-        }
-
-        private static bool IsCandidate(Selectable selectable) {
-            return selectable.IsInteractable()
-                && selectable.navigation.mode != UINavigation.Mode.None
-                && selectable.transform is RectTransform;
         }
 
         // The candidate's rect in the origin's local space.

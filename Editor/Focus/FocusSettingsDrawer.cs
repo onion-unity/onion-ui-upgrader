@@ -11,7 +11,7 @@ namespace Onion.UI.Editor {
             EditorGUILayout.PropertyField(focus.FindPropertyRelative(nameof(FocusSettings.continueFromHover)));
             EditorGUILayout.PropertyField(focus.FindPropertyRelative(nameof(FocusSettings.revealOnFirstInput)));
             EditorGUILayout.PropertyField(focus.FindPropertyRelative(nameof(FocusSettings.cancelSwitchesMode)));
-            NavigationSettingsDrawer.AssetField<SelectableStyle>(focus.FindPropertyRelative(nameof(FocusSettings.projectWideStyle)), "Selectable Style");
+            UIUpgraderEditorGUI.AssetField<SelectableStyle>(focus.FindPropertyRelative(nameof(FocusSettings.projectWideStyle)), "Selectable Style");
         }
     }
 }
