@@ -24,6 +24,10 @@ namespace Onion.UI.Navigation {
         private static Transform[] _transforms = new Transform[64];
         private static Vector3[] _worldCorners = new Vector3[64 * 4];
         private static bool[] _hasCorners = new bool[64];
+        // Each candidate's innermost mask that hides it completely (null when visible), per collection.
+        private static Transform[] _clippedBy = new Transform[64];
+        // Whether each transform met while looking for masks is an active mask, per collection.
+        private static readonly Dictionary<Transform, bool> _isMask = new();
         private static int _count;
         // While batching, the candidates are collected once and shared by every Resolve until EndBatch.
         private static bool _batching;
@@ -336,13 +340,17 @@ namespace Onion.UI.Navigation {
                     _transforms = new Transform[capacity];
                     _worldCorners = new Vector3[capacity * 4];
                     _hasCorners = new bool[capacity];
+                    _clippedBy = new Transform[capacity];
                 }
 
                 _count = Selectable.AllSelectablesNoAlloc(_candidates);
                 System.Array.Clear(_hasCorners, 0, _count);
+                _isMask.Clear();
+                bool skipClipped = NavigationSettings.skipsClippedSelectables;
                 for (int i = 0; i < _count; i++) {
                     var candidate = _candidates[i];
                     _transforms[i] = IsCandidate(candidate) ? candidate.transform : null;
+                    _clippedBy[i] = skipClipped && _transforms[i] is not null ? FindClippingMask(i) : null;
                 }
 
                 _collected = true;
@@ -373,6 +381,13 @@ namespace Onion.UI.Navigation {
             // Reference checks: everything here is alive during a Resolve, and Unity's == costs more.
             var transform = _transforms[index];
             if (transform is null || ReferenceEquals(_candidates[index], origin)) {
+                return -1;
+            }
+
+            // Hidden by a mask the origin is outside of (e.g. a ScrollRect item scrolled out of view, moved to
+            // from outside the ScrollRect). From inside the mask it stays a candidate, so moves can scroll on.
+            var mask = _clippedBy[index];
+            if (mask is not null && !origin.transform.IsChildOf(mask)) {
                 return -1;
             }
 
@@ -472,6 +487,11 @@ namespace Onion.UI.Navigation {
 
         // The candidate's rect in the origin's local space.
         private static Rect GetLocalRect(int index) {
+            return GetRectIn(_toOrigin, index);
+        }
+
+        // The candidate's rect in the space the matrix transforms world points into.
+        private static Rect GetRectIn(Matrix4x4 worldToLocal, int index) {
             int offset = index * 4;
             if (!_hasCorners[index]) {
                 ((RectTransform)_transforms[index]).GetWorldCorners(_corners);
@@ -479,15 +499,56 @@ namespace Onion.UI.Navigation {
                 _hasCorners[index] = true;
             }
 
-            Vector2 min = _toOrigin.MultiplyPoint3x4(_worldCorners[offset]);
+            Vector2 min = worldToLocal.MultiplyPoint3x4(_worldCorners[offset]);
             Vector2 max = min;
             for (int i = 1; i < 4; i++) {
-                Vector2 point = _toOrigin.MultiplyPoint3x4(_worldCorners[offset + i]);
+                Vector2 point = worldToLocal.MultiplyPoint3x4(_worldCorners[offset + i]);
                 min = Vector2.Min(min, point);
                 max = Vector2.Max(max, point);
             }
 
             return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        }
+
+        // The innermost active Mask or RectMask2D above the candidate whose area it doesn't overlap, or null.
+        // Overlaps under 1 unit count as hidden, so an item just touching the edge isn't visible by rounding.
+        private static Transform FindClippingMask(int index) {
+            for (var parent = _transforms[index].parent; parent != null; parent = parent.parent) {
+                if (!IsMask(parent, out var area)) {
+                    continue;
+                }
+
+                var rect = GetRectIn(parent.worldToLocalMatrix, index);
+                if (rect.xMax <= area.xMin + 1f || rect.xMin >= area.xMax - 1f
+                    || rect.yMax <= area.yMin + 1f || rect.yMin >= area.yMax - 1f) {
+                    return parent;
+                }
+            }
+
+            return null;
+        }
+
+        // area: the clipped area in the mask's local space (a RectMask2D's padding shrinks it).
+        private static bool IsMask(Transform transform, out Rect area) {
+            area = default;
+            if (_isMask.TryGetValue(transform, out bool isMask) && !isMask) {
+                return false;
+            }
+
+            if (transform.TryGetComponent(out RectMask2D rectMask) && rectMask.isActiveAndEnabled) {
+                var padding = rectMask.padding;
+                var rect = rectMask.rectTransform.rect;
+                area = Rect.MinMaxRect(rect.xMin + padding.x, rect.yMin + padding.y, rect.xMax - padding.z, rect.yMax - padding.w);
+                isMask = true;
+            } else if (transform.TryGetComponent(out Mask mask) && mask.isActiveAndEnabled && mask.MaskEnabled()) {
+                area = mask.rectTransform.rect;
+                isMask = true;
+            } else {
+                isMask = false;
+            }
+
+            _isMask[transform] = isMask;
+            return isMask;
         }
     }
 }

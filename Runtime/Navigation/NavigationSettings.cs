@@ -24,6 +24,13 @@ namespace Onion.UI.Navigation {
         internal bool recoverSelection = true;
 
         /// <summary>
+        /// Whether Selectables hidden by a mask are skipped when moving from outside that mask.
+        /// </summary>
+        [Tooltip("Moving from outside a Mask or RectMask2D skips the Selectables it hides completely, such as ScrollRect items scrolled out of view. From inside the mask they can still be moved to.")]
+        [SerializeField]
+        internal bool skipClippedSelectables = true;
+
+        /// <summary>
         /// The default profile, or null when the upgrade is off, no profile is assigned,
         /// or there are no settings. Null means Unity's default navigation is used.
         /// </summary>
@@ -42,5 +49,10 @@ namespace Onion.UI.Navigation {
         /// Whether lost selections are recovered. Only while the upgrade is on.
         /// </summary>
         internal static bool recoversSelection => profile != null && UIUpgraderSettings.instance.navigation.recoverSelection;
+
+        /// <summary>
+        /// Whether Selectables hidden by a mask are skipped from outside it. Only while the upgrade is on.
+        /// </summary>
+        internal static bool skipsClippedSelectables => profile != null && UIUpgraderSettings.instance.navigation.skipClippedSelectables;
     }
 }

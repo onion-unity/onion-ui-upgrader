@@ -49,6 +49,7 @@ Other behaviors:
 
 - Sliders and Scrollbars in Automatic mode still change their value along their own axis.
 - Wrap Around in Horizontal/Vertical mode is supported.
+- Selectables hidden by a Mask or RectMask2D (completely outside its area, such as ScrollRect items scrolled out of view) can't be moved to from outside that mask, so a button below a ScrollRect moves on to the next button instead of jumping into the list's hidden items. From inside the mask they are still reachable, so moving through a list keeps going past its visible part. Unity doesn't do this; uncheck **Skip Clipped Selectables** in the Navigation section to turn it off.
 
 ## Navigation Profile
 
